@@ -24,7 +24,6 @@ public:
     }
 };
 
-// --- ส่วนที่เพิ่มเข้ามาเพื่อจัดการในไฟล์เดียว ---
 #include "gun.h"
 #include "baseball.h"
 #include "bow.h"
@@ -36,9 +35,10 @@ public:
             case 1:  return new Gun();
             case 2:  return new BaseballBat();
             case 3:  return new Bow();
-            default: return new Gun(); // ค่าเริ่มต้น
+            default: return new Gun(); // เริ่มต้นถ้าไม่เลือกอาวุธ
         }
     }
 };
+
 
 #endif
