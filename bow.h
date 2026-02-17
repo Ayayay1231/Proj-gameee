@@ -10,4 +10,4 @@ public:
         bonusCrit = 20;
     }
 };
-#endif
+#endif // BOW_H
