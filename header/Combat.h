@@ -41,6 +41,7 @@ public:
                 }
 
                 // --- 1. โจมตี ---
+            if(event.type == sf::Event::KeyPressed){
                 if (sf::Keyboard::isKeyPressed(sf::Keyboard::C)) {
                     int d = p.attack(isCrit, (pot.atkBuffTurn > 0 ? 10 : 0), (pot.critBuffTurn > 0 ? 10 : 0));
                     m.hp -= d; s.totalDmg += d;
@@ -79,6 +80,7 @@ public:
                     else { cout << "!! No Gold !!" << endl; showMenu = true; }
                     sf::sleep(sf::milliseconds(300));
                 }
+            }
 
                 window.clear();
                 window.display();
