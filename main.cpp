@@ -22,7 +22,7 @@ int main() {
     player.level = 1;
     player.exp = 0;
     
-    // เรียกใช้ selectWeapon ตามไฟล์ Weapon.h เดิมของคุณ
+    // เรียกใช้ selectWeapon เพื่อให้ผู้เล่นได้เลือกอาวุธตั้งแต่เริ่มเกม
     player.weapon = WeaponFactory::selectWeapon(1); 
 
     Potion potion;
@@ -55,7 +55,7 @@ int main() {
         cout << "A wild " << monster.name << " (HP: " << monster.hp << ") appeared!" << endl;
         
         // เข้าสู่โหมดต่อสู้
-        bool victory = Combat::start(player, monster, potion, summary);
+        bool victory = Combat::start(player, monster, potion, summary, window);
 
         if (victory) {
             cout << "\n----------------------------------------" << endl;
