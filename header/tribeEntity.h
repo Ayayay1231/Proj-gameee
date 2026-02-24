@@ -1,74 +1,110 @@
 #pragma once
 #include <SFML/Graphics.hpp>
-#include "relationship.h"
+#include "relationship.h" 
 #include <SFML/System.hpp>
 #include <iostream>
 #include <cmath>
+#include <cstdlib> 
+
+using namespace std;
 
 class TribeEntity {
 private:
     Relationship relation; 
     sf::Vector2f position;
 
-    // helper func
+    
+    float timeSinceLastInteraction; 
+    float timeNearNeutral;          
+    bool hasPrintedHostile;         
+
+    
+    float assistChance;     // ally assist chance
+    float callHelpChance;   // call for help
+
+    // helper function
     float getDistance(sf::Vector2f p1, sf::Vector2f p2) {
         float dx = p1.x - p2.x;
         float dy = p1.y - p2.y;
-        return std::sqrt(dx*dx + dy*dy);
+        return sqrt(dx*dx + dy*dy);
     }
 
-    // unit vec
-    sf::Vector2f normalize(sf::Vector2f source) {
-        float length = std::sqrt(source.x * source.x + source.y * source.y);
-        if (length != 0)
-            return source / length;
-        else
-            return source;
-    }
-
-    // behavior funcs
+    // bahavior func
     void performAllyBehavior(float deltaTime, sf::Vector2f playerPos) {
-        // ally (walks closer)
+        // walks closer to the player without decreasing relationshp
         float dist = getDistance(position, playerPos);
-        if (dist > 60.0f) {
+        if (dist > 80.0f) {
             sf::Vector2f direction = playerPos - position;
-            direction = normalize(direction); 
-            position += direction * 100.0f * deltaTime;
+            float len = sqrt(direction.x*direction.x + direction.y*direction.y);
+            if (len != 0) direction /= len;
+            position += direction * 60.0f * deltaTime;
         }
-        
-        // decreases relationship when neglected
-        relation.modify(-0.5f * deltaTime);
     }
 
     void performNeutralBehavior(float deltaTime, sf::Vector2f playerPos) {
-        // neutral
         float dist = getDistance(position, playerPos);
-        if (dist < 50.0f) {
-            // std::cout << "(Neutral) Too close!\n";
-            relation.modify(-5.0f * deltaTime);
+        
+        if (dist < 10.0f) { 
+            timeNearNeutral += deltaTime;
+            
+            // decreases relationship once getting too close
+            relation.modify(-2.0f * deltaTime); 
+            
+            // decreases in a faster rate
+            if (timeNearNeutral > 3.0f) {
+                cout << "The neutral tribe is annoyed by your presence!\n";
+                relation.modify(-15.0f); 
+                timeNearNeutral = 0.0f; // reset
+            }
         } else {
-            relation.modify(-1.0f * deltaTime);
+            timeNearNeutral = 0.0f; // retreat
         }
     }
 
     void performHostileBehavior(float deltaTime, sf::Vector2f playerPos) {
-        // hostile
-        sf::Vector2f direction = playerPos - position;
-        direction = normalize(direction);
-        position += direction * 150.0f * deltaTime; // runs faster than allies
-        // std::cout << "(Hostile) Attack!\n";
+        // prints once
+        if (!hasPrintedHostile) {
+            cout << "(Hostile) The tribe is attacking you!\n";
+            hasPrintedHostile = true;
+        }
+
+        // charges towards the player
+        float dist = getDistance(position, playerPos);
+        if (dist < 150.0f) {
+            sf::Vector2f direction = playerPos - position;
+            float len = sqrt(direction.x*direction.x + direction.y*direction.y);
+            if (len != 0) direction /= len;
+            position += direction * 120.0f * deltaTime; // runs fastr
+        }
     }
 
 public:
-    // constructor
     TribeEntity(float startScore, sf::Vector2f startPos) 
     : relation(startScore), position(startPos) {
+        timeSinceLastInteraction = 0.0f;
+        timeNearNeutral = 0.0f;
+        hasPrintedHostile = false;
+
+        // randomizing chances
+        assistChance = (rand() % 50 + 30) / 100.0f; 
+        callHelpChance = (rand() % 60 + 20) / 100.0f;
     }
     
-    // updated func
     void update(float deltaTime, sf::Vector2f playerPos) {
+        // time decay
+        timeSinceLastInteraction += deltaTime;
+        if (timeSinceLastInteraction > 15.0f) { 
+            relation.modify(-0.5f * deltaTime); // gradually decreases
+        }
+
         RelationState currentState = relation.getState();
 
+        // once it's not hostile
+        if (currentState != RelationState::Hostile) {
+            hasPrintedHostile = false;
+        }
+
+        // more behaviors
         switch (currentState) {
             case RelationState::Ally:
                 performAllyBehavior(deltaTime, playerPos);
@@ -82,14 +118,59 @@ public:
         }
     }
     
-    void receiveGift(){
+    // events
+
+    void receiveItem() { 
         relation.modify(15.0f); 
-        std::cout << "Gift Received! Current Score: " << relation.getScore() << "\n";
+        timeSinceLastInteraction = 0.0f; //resets time decay
+        cout << "Item Given! Tribe relationship increased.\n";
+    }
+
+    
+    void onPlayerGatherItem(sf::Vector2f playerPos) {
+        float dist = getDistance(position, playerPos);
+        RelationState state = relation.getState();
+
+        if (state == RelationState::Ally && dist < 10.0f) {
+            
+            cout << "You safely gathered items near your Ally.\n";
+            
+        } else if (state == RelationState::Neutral) {
+           
+            if (rand() % 100 < 60) { 
+                relation.modify(-10.0f);
+                cout << "The Neutral tribe did not like you stealing their resources!\n";
+            }
+        }
+        timeSinceLastInteraction = 0.0f; 
+    }
+
+    //gets attacked
+    void onPlayerAttacked(sf::Vector2f playerPos) {
+        float dist = getDistance(position, playerPos);
+        
+        if (relation.getState() == RelationState::Ally && dist < 50.0f) {
+            
+            if ((rand() % 100 / 100.0f) < assistChance) {
+                cout << "*** The Ally Tribe jumps in to protect you! ***\n";
+                
+            }
+        }
+    }
+
+    // player attacks a tribe
+    void onAttackedByPlayer() {
+        relation.modify(-20.0f); 
+        timeSinceLastInteraction = 0.0f;
+        
+        if (relation.getState() == RelationState::Hostile) {
+            // calls for its tribe
+            if ((rand() % 100 / 100.0f) < callHelpChance) {
+                cout << "*** The tribe sounded a horn! Reinforcements are coming! ***\n";
+                
+            }
+        }
     }
     
-    // getter
     sf::Vector2f getPosition() { return position; } 
-    
-    
-    RelationState getState() const { return relation.getState(); }
 };
