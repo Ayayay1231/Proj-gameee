@@ -5,13 +5,13 @@
 #include <iostream>
 #include <vector>
 #include <fstream> 
-
+#include "Monster.h"
 #include "Npc.h"
 #include "Player.h"
-#include "Monster.h"
 #include "Potion.h"
 #include "Combat.h"
 #include "Weapon.h"
+#include "Shop.h"        // ✅ เพิ่ม
 #include "FirstPage.h" 
 
 class Game {
@@ -27,7 +27,7 @@ private:
     std::string currentMapName = "map_world.json";
 
     Player rpgPlayer;
-    Potion potion;
+    Potion potion;             // ✅ invHP/invAtk/invCrit อยู่ใน Potion แล้ว
     int monsterCount = 0;
     NPCManager npcSys;
     std::string playerName = "Hero"; 
@@ -46,9 +46,8 @@ private:
     int charIdx = 0;
     sf::Clock typeClock;
 
-    // --- ตัวแปรใหม่สำหรับโชว์ข้อความให้เราเลือกตอบ ---
     sf::Text optA, optB;
-    int currentOption = 0; 
+    int currentOption = 0;
 
 public:
     Game() {
@@ -69,33 +68,39 @@ public:
         dialogText.setFillColor(sf::Color::White); dialogText.setPosition(160.f, 530.f);
         
         saveNotif.setFont(font); saveNotif.setCharacterSize(30);
-        saveNotif.setFillColor(sf::Color::Green); saveNotif.setString("Game Saved!"); saveNotif.setPosition(20.f, 20.f);
+        saveNotif.setFillColor(sf::Color::Green);
+        saveNotif.setString("Game Saved!"); saveNotif.setPosition(20.f, 20.f);
 
-        // --- ตั้งค่าฟอนต์ให้กล่องตัวเลือก ---
         optA.setFont(font); optA.setCharacterSize(24); optA.setPosition(750.f, 530.f);
         optB.setFont(font); optB.setCharacterSize(24); optB.setPosition(750.f, 580.f);
 
-        // NPC 1: ตัวประหลาด (ไม่มีทางเลือก)
+        // NPC 1: ตัวประหลาด
         vector<string> elderMsg = {"Hello there !", "You got F.", "you stupid nigga!"};
         npcSys.spawnNPC("map_world.json","Mystery creature", elderMsg, "npc1.png", 500.f, 400.f, 0.5f, 0.5f);
-
         npcSys.setLastNPCChoice(
-            "Ah yes",           // ข้อ 1
-            "Oh noo",           // ข้อ 2
-            "Wish Aha blesses you!",    // ตอบถ้าเราเลือกข้อ 1
-            "Suck my dih now"         // ตอบถ้าเราเลือกข้อ 2
+            "Ah yes", "Oh noo",
+            "Wish Aha blesses you!", "Suck my dih now"
         );
 
-        // NPC 2: ทหารยาม (มีทางเลือก!!)
+        // NPC 2: ทหารยาม
         vector<string> guardDialog = {"Sawaddee kub pom ruhee na.","wannee pom ja son karn lia hee","especially my sister rerorerorero."};
-        npcSys.spawnNPC("map_house.json","Guard", guardDialog, "monster1.png", 300.f, 200.f,0.5f,0.5f);
-        
-        // --- เพิ่มโค้ดกำหนดตัวเลือกให้ทหารยาม (สลับ 2 ข้อนี้ดูเวลาเล่น) ---
+        npcSys.spawnNPC("map_house.json","Guard", guardDialog, "monster1.png", 300.f, 200.f, 0.5f, 0.5f);
         npcSys.setLastNPCChoice(
-            "Krub phee",           // ข้อ 1
-            "Mai aow a",           // ข้อ 2
-            "Dee mak nong rak",    // ทหารยามตอบถ้าเราเลือกข้อ 1
-            "Tai sa mung!"         // ทหารยามตอบถ้าเราเลือกข้อ 2
+            "Krub phee", "Mai aow a",
+            "Dee mak nong rak", "Tai sa mung!"
+        );
+
+        // ✅ NPC 3: Merchant — เปิด Shop.h
+        vector<string> merchantMsg = {
+            "Howdy traveler!",
+            "I have goods for sale. Interested?"
+        };
+        npcSys.spawnNPC("map_world.json", "Merchant", merchantMsg, "npc1.png", 700.f, 300.f, 0.5f, 0.5f);
+        npcSys.setLastNPCChoice(
+            "Show me your wares",
+            "Maybe later",
+            "",
+            "Safe travels!"
         );
 
         if (!map.load("map_world.json")) std::cout << "Map error\n";
@@ -107,14 +112,25 @@ public:
         player.setPosition(600.f, 600.f); 
 
         fadeRect.setSize({1280, 720}); fadeRect.setFillColor(sf::Color(0, 0, 0, 0)); 
-        rpgPlayer.maxHp = 100; rpgPlayer.hp = rpgPlayer.maxHp; rpgPlayer.wallet.balance = 100; 
-        rpgPlayer.level = 1; rpgPlayer.exp = 0; rpgPlayer.weapon = WeaponFactory::selectWeapon(1);
+        rpgPlayer.maxHp = 100; rpgPlayer.hp = rpgPlayer.maxHp;
+        rpgPlayer.wallet.balance = 100; 
+        rpgPlayer.level = 1; rpgPlayer.exp = 0;
+        rpgPlayer.weapon = WeaponFactory::selectWeapon(1);
     }
 
     void saveGame() {
         std::ofstream file("save.txt");
         if (file.is_open()) {
-            file << playerName << "\n" << currentMapName << "\n" << player.getPosition().x << " " << player.getPosition().y << "\n" << rpgPlayer.hp << " " << rpgPlayer.maxHp << "\n" << rpgPlayer.level << " " << rpgPlayer.exp << "\n" << rpgPlayer.wallet.balance << " " << rpgPlayer.invHP << "\n";
+            file << playerName << "\n"
+                 << currentMapName << "\n"
+                 << player.getPosition().x << " " << player.getPosition().y << "\n"
+                 << rpgPlayer.hp << " " << rpgPlayer.maxHp << "\n"
+                 << rpgPlayer.level << " " << rpgPlayer.exp << "\n"
+                 << rpgPlayer.wallet.balance << "\n"
+                 // ✅ inventory จาก Potion
+                 << potion.invHP << " " << potion.invAtk << " " << potion.invCrit << "\n"
+                 << (rpgPlayer.weapon ? rpgPlayer.weapon->level : 1) << "\n"
+                 << rpgPlayer.hasFireArrow << " " << rpgPlayer.fireArrowAmmo << "\n";
             file.close(); saveNotifTimer = 120; 
         }
     }
@@ -122,21 +138,35 @@ public:
     bool loadGame() {
         std::ifstream file("save.txt");
         if (file.is_open()) {
-            std::getline(file, playerName); std::getline(file, currentMapName);
+            std::getline(file, playerName);
+            std::getline(file, currentMapName);
             float px, py; file >> px >> py; player.setPosition(px, py);
-            file >> rpgPlayer.hp >> rpgPlayer.maxHp >> rpgPlayer.level >> rpgPlayer.exp >> rpgPlayer.wallet.balance >> rpgPlayer.invHP;
+            file >> rpgPlayer.hp >> rpgPlayer.maxHp
+                 >> rpgPlayer.level >> rpgPlayer.exp
+                 >> rpgPlayer.wallet.balance;
+            // ✅ load inventory จาก Potion
+            file >> potion.invHP >> potion.invAtk >> potion.invCrit;
+            int wLv = 1; file >> wLv;
+            if (rpgPlayer.weapon) rpgPlayer.weapon->level = wLv;
+            file >> rpgPlayer.hasFireArrow >> rpgPlayer.fireArrowAmmo;
             file.close(); map.load(currentMapName); return true;
         } return false; 
     }
 
-    void startCombat() { /* คงไว้เหมือนเดิม */ 
-        monsterCount++; Monster monster(monsterCount); monster.name = "Monster #" + std::to_string(monsterCount);
-        monster.maxHp = 50 + (monsterCount * 10); monster.hp = monster.maxHp; monster.maxDmg = 5 + (monsterCount * 2);
-        Summary summary; bool victory = Combat::start(rpgPlayer, monster, potion, summary, window);
+    void startCombat() {
+        monsterCount++; Monster monster(monsterCount);
+        monster.name   = "Monster #" + std::to_string(monsterCount);
+        monster.maxHp  = 50 + (monsterCount * 10); monster.hp = monster.maxHp;
+        monster.maxDmg = 5 + (monsterCount * 2);
+        Summary summary;
+        bool victory = Combat::start(rpgPlayer, monster, potion, summary, window);
         if (victory) {
-            rpgPlayer.wallet.addMoney((rand() % 31) + 20); rpgPlayer.exp += (rand() % 100) + ((monster.maxHp / 10) + monster.maxDmg);
+            rpgPlayer.wallet.addMoney((rand() % 31) + 20);
+            rpgPlayer.exp += (rand() % 100) + ((monster.maxHp / 10) + monster.maxDmg);
             while (rpgPlayer.exp >= rpgPlayer.getNextLevelExp()) {
-                rpgPlayer.exp -= rpgPlayer.getNextLevelExp(); rpgPlayer.level++; rpgPlayer.maxHp += 20; rpgPlayer.hp = rpgPlayer.maxHp; rpgPlayer.baseMaxDmg += 5;   
+                rpgPlayer.exp -= rpgPlayer.getNextLevelExp();
+                rpgPlayer.level++; rpgPlayer.maxHp += 20;
+                rpgPlayer.hp = rpgPlayer.maxHp; rpgPlayer.baseMaxDmg += 5;   
             }
         } else { window.close(); }
     }
@@ -165,9 +195,8 @@ public:
                 if (sf::Keyboard::isKeyPressed(sf::Keyboard::F)) startCombat();
             }
         } 
-        // อัปเดตเอฟเฟกต์พิมพ์ดีดเฉพาะตอน 1 กับ 3
-        else if (gameState == 1 || gameState == 3) { 
-            if (charIdx < fullMsg.length() && typeClock.getElapsedTime().asMilliseconds() > 25) {
+        else if (gameState == 1 || gameState == 3) {  // ✅ ลบ state 6 ออก
+            if (charIdx < (int)fullMsg.length() && typeClock.getElapsedTime().asMilliseconds() > 25) {
                 currentMsg += fullMsg[charIdx]; charIdx++; typeClock.restart();
             }
             dialogText.setString(currentMsg);
@@ -178,26 +207,28 @@ public:
     }
 
     void render() {
-        window.clear(); window.draw(map); npcSys.drawAll(window, currentMapName); window.draw(player); 
-        
-        // ถ้าอยู่ในโหมดคุย หรือโหมดเลือกตอบ ให้วาดกล่อง
+        window.clear();
+        window.draw(map);
+        npcSys.drawAll(window, currentMapName);
+        window.draw(player); 
+
         if (gameState >= 1) {
-            window.draw(dialogBox); window.draw(dialogName); window.draw(dialogText);
+            window.draw(dialogBox);
+            window.draw(dialogName);
+            window.draw(dialogText);
         }
-        
-        // --- ส่วนที่เพิ่ม: ถ่ายทอดตัวเลือกลงจอภาพ ---
+
         if (gameState == 2) {
             optA.setString("-> " + talkingTo->choiceA);
             optB.setString("-> " + talkingTo->choiceB);
-            
             optA.setFillColor(currentOption == 0 ? sf::Color::Red : sf::Color::White);
             optB.setFillColor(currentOption == 1 ? sf::Color::Red : sf::Color::White);
-            
             window.draw(optA); window.draw(optB);
         }
 
         if (saveNotifTimer > 0) window.draw(saveNotif);
-        window.draw(fadeRect); window.display();
+        window.draw(fadeRect);
+        window.display();
     }
 
     void run() {
@@ -244,9 +275,7 @@ public:
                 if (e.type == sf::Event::KeyPressed) {
                     if (e.key.code == sf::Keyboard::F5) saveGame();
 
-                    // ===========================================
-                    // State 0: กด E คุย
-                    // ===========================================
+                    // ─── State 0: กด E คุย ───────────────────────────────
                     if (gameState == 0 && e.key.code == sf::Keyboard::E) {
                         bool interactedWithNPC = false;
                         for (auto& npc : npcSys.list) {
@@ -257,7 +286,7 @@ public:
                                 interactedWithNPC = true; break; 
                             }
                         }
-                        if (!interactedWithNPC) { /* (โค้ดวาร์ปเหมือนเดิม) */ 
+                        if (!interactedWithNPC) {
                             sf::FloatRect warpCheck = player.getGlobalBounds(); warpCheck.left -= 25; warpCheck.top -= 25; warpCheck.width += 50; warpCheck.height += 50;
                             for (auto& w : map.warps) {
                                 if (warpCheck.intersects(w.rect)) {
@@ -268,45 +297,43 @@ public:
                             }
                         }
                     }
-                    // ===========================================
-                    // State 1: คุยไปเรื่อยๆ ตามปกติ
-                    // ===========================================
+                    // ─── State 1: คุยปกติ ────────────────────────────────
                     else if (gameState == 1 && e.key.code == sf::Keyboard::Space) {
-                        if (charIdx < fullMsg.length()) {
+                        if (charIdx < (int)fullMsg.length()) {
                             currentMsg = fullMsg; charIdx = fullMsg.length();
                         } else {
                             currentDialogPage++;
-                            if (currentDialogPage < talkingTo->messages.size()) {
+                            if (currentDialogPage < (int)talkingTo->messages.size()) {
                                 fullMsg = talkingTo->messages[currentDialogPage];
                                 currentMsg = ""; charIdx = 0; typeClock.restart();
                             } else {
-                                // ถ้าคุยจบแล้ว และ NPC ตัวนี้ "มีทางเลือก" ให้ตัดไปโหมดเลือก
                                 if (talkingTo->hasChoice) {
-                                    gameState = 2; 
-                                    currentOption = 0;
+                                    gameState = 2; currentOption = 0;
                                 } else {
                                     gameState = 0; talkingTo = nullptr;
                                 }
                             }
                         }
                     }
-                    // ===========================================
-                    // State 2: โหมดเลือกตอบ (W/S)
-                    // ===========================================
+                    // ─── State 2: เลือกตอบ ───────────────────────────────
                     else if (gameState == 2) {
-                        if (e.key.code == sf::Keyboard::W || e.key.code == sf::Keyboard::Up) currentOption = 0;
+                        if (e.key.code == sf::Keyboard::W || e.key.code == sf::Keyboard::Up)   currentOption = 0;
                         if (e.key.code == sf::Keyboard::S || e.key.code == sf::Keyboard::Down) currentOption = 1;
                         if (e.key.code == sf::Keyboard::Space || e.key.code == sf::Keyboard::Enter) {
-                            gameState = 3; 
-                            fullMsg = (currentOption == 0) ? talkingTo->replyA : talkingTo->replyB;
-                            currentMsg = ""; charIdx = 0; typeClock.restart();
+                            // ✅ Merchant → เปิด Shop.h โดยตรง
+                            if (currentOption == 0 && talkingTo->name == "Merchant") {
+                                Shop::open(rpgPlayer, potion, window, font);
+                                gameState = 0; talkingTo = nullptr;
+                            } else {
+                                gameState = 3;
+                                fullMsg = (currentOption == 0) ? talkingTo->replyA : talkingTo->replyB;
+                                currentMsg = ""; charIdx = 0; typeClock.restart();
+                            }
                         }
                     }
-                    // ===========================================
-                    // State 3: โชว์ผลลัพธ์คำตอบ
-                    // ===========================================
+                    // ─── State 3: โชว์ผลตอบ ─────────────────────────────
                     else if (gameState == 3 && e.key.code == sf::Keyboard::Space) {
-                        if (charIdx < fullMsg.length()) {
+                        if (charIdx < (int)fullMsg.length()) {
                             currentMsg = fullMsg; charIdx = fullMsg.length();
                         } else {
                             gameState = 0; talkingTo = nullptr;
