@@ -1,6 +1,7 @@
 #ifndef SWORD_H
 #define SWORD_H
-#include "weapon.h"
+#include "Weapon.h"
+#include "Monster.h" // <--- ต้องมีบรรทัดนี้!
 
 class Sword : public Weapon {
 public:
@@ -11,7 +12,6 @@ public:
     }
 
     void applyEffect(Monster& m) override {
-        // Lv.1=20%  Lv.2=35%  Lv.3=50%
         int chance = (level == 1) ? 20 : (level == 2) ? 35 : 50;
         if (rand() % 100 < chance) {
             m.bleedTurn = 3;
@@ -22,7 +22,7 @@ public:
     int getTotalBonusDmg(Monster& m, bool& isCrit) override {
         int dmg = baseBonusDmg + (level * 5);
         if (m.bleedTurn > 0)
-            dmg += (level == 3) ? 10 : 5; // Lv.3 bonus เพิ่ม
+            dmg += (level == 3) ? 10 : 5; 
         return dmg;
     }
 };

@@ -1,4 +1,3 @@
-//มุกมิก
 #include<stdio.h>
 #include<iostream>
 #include <SFML/Graphics.hpp>

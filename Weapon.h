@@ -11,7 +11,7 @@ public:
     int level;
     int baseBonusDmg;
     int bonusCrit;
-    int maxLevel = 3; // ✅ เพิ่ม
+    int maxLevel = 3; 
 
     Weapon() : level(1), baseBonusDmg(0), bonusCrit(0), name("Unknown") {}
     virtual ~Weapon() {}
@@ -24,14 +24,16 @@ public:
         return baseBonusDmg + (level * 5); 
     }
 
-    // ✅ upgrade มี return value แล้ว
+    // --- 2 ตัวนี้คือตัวที่ Player.h โวยวายว่าหาไม่เจอ! ---
+    int getDamage() { return getTotalBonusDmg(); }
+    int getCritChance() { return bonusCrit; }
+
     bool upgrade() {
         if (isMaxLevel()) return false;
         level++;
         return true;
     }
 
-    // ✅ เพิ่ม 2 ฟังก์ชันที่ Game.hpp ต้องการ
     bool isMaxLevel() { return level >= maxLevel; }
 
     int upgradeCost() {
@@ -58,5 +60,4 @@ public:
         }
     }
 };
-
 #endif

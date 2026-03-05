@@ -16,5 +16,6 @@ class Menu
     int selectedItem=0;
     sf::Font font;
     sf::Text menu[Max_Items];
+    
 
 };

@@ -1,17 +1,20 @@
-// Game.hpp
+// Game.hpp - FULL VERSION (Fixed Braces & Shop System)
 #ifndef GAME_HPP
 #define GAME_HPP
 #include "TileMap.hpp"
 #include <iostream>
 #include <vector>
 #include <fstream> 
-#include "Monster.h"
+#include <string>
+
+#include "shop.h"
 #include "Npc.h"
+#include "MapItem.h" 
 #include "Player.h"
+#include "Monster.h"
 #include "Potion.h"
 #include "Combat.h"
 #include "Weapon.h"
-#include "Shop.h"        // ✅ เพิ่ม
 #include "FirstPage.h" 
 
 class Game {
@@ -27,14 +30,20 @@ private:
     std::string currentMapName = "map_world.json";
 
     Player rpgPlayer;
-    Potion potion;             // ✅ invHP/invAtk/invCrit อยู่ใน Potion แล้ว
+    Potion potion;
     int monsterCount = 0;
+    
     NPCManager npcSys;
+    MapItemManager itemSys; 
+
     std::string playerName = "Hero"; 
 
     int gameState = 0; 
     NPC* talkingTo = nullptr; 
     int currentDialogPage = 0; 
+
+    int currentMenuTab = 0; 
+    int menuSelection = 0;  
 
     sf::Font font;
     sf::RectangleShape dialogBox;
@@ -47,11 +56,11 @@ private:
     sf::Clock typeClock;
 
     sf::Text optA, optB;
-    int currentOption = 0;
+    int currentOption = 0; 
 
 public:
     Game() {
-        window.create(sf::VideoMode(1280, 720), "PROJECT");
+        window.create(sf::VideoMode(1280, 720), "PlsNoFPlsNoF");
         window.setFramerateLimit(60);
         if (!font.loadFromFile("Minecraft.ttf")) std::cout << "Error: Cannot load font\n";
         
@@ -68,40 +77,32 @@ public:
         dialogText.setFillColor(sf::Color::White); dialogText.setPosition(160.f, 530.f);
         
         saveNotif.setFont(font); saveNotif.setCharacterSize(30);
-        saveNotif.setFillColor(sf::Color::Green);
-        saveNotif.setString("Game Saved!"); saveNotif.setPosition(20.f, 20.f);
+        saveNotif.setFillColor(sf::Color::Green); saveNotif.setPosition(20.f, 20.f);
 
         optA.setFont(font); optA.setCharacterSize(24); optA.setPosition(750.f, 530.f);
         optB.setFont(font); optB.setCharacterSize(24); optB.setPosition(750.f, 580.f);
 
-        // NPC 1: ตัวประหลาด
-        vector<string> elderMsg = {"Hello there !", "You got F.", "you stupid nigga!"};
-        npcSys.spawnNPC("map_world.json","Mystery creature", elderMsg, "npc1.png", 500.f, 400.f, 0.5f, 0.5f);
-        npcSys.setLastNPCChoice(
-            "Ah yes", "Oh noo",
-            "Wish Aha blesses you!", "Suck my dih now"
-        );
+        // ของติดตัว
+        Skill heavyStrike = {"Heavy Strike", "Deals 2.0x physical damage.", 10, 2.0f, 0};
+        rpgPlayer.learnedSkills.push_back(heavyStrike);
+        rpgPlayer.inventory.push_back({"Apple", "A fresh apple. Heals 20 HP.", 1, 20});
 
-        // NPC 2: ทหารยาม
-        vector<string> guardDialog = {"Sawaddee kub pom ruhee na.","wannee pom ja son karn lia hee","especially my sister rerorerorero."};
-        npcSys.spawnNPC("map_house.json","Guard", guardDialog, "monster1.png", 300.f, 200.f, 0.5f, 0.5f);
-        npcSys.setLastNPCChoice(
-            "Krub phee", "Mai aow a",
-            "Dee mak nong rak", "Tai sa mung!"
-        );
+        // สร้าง NPC (ID 1 คือคนแจกเควส)
+        vector<string> gmMsg = {"Hello Hero..."}; 
+        npcSys.spawnNPC(1, "map_world.json", "Guild Master", gmMsg, "eps1.png" , 300.f, 200.f, 0.5f, 0.5f);
 
-        // ✅ NPC 3: Merchant — เปิด Shop.h
-        vector<string> merchantMsg = {
-            "Howdy traveler!",
-            "I have goods for sale. Interested?"
-        };
-        npcSys.spawnNPC("map_world.json", "Merchant", merchantMsg, "npc1.png", 700.f, 300.f, 0.5f, 0.5f);
-        npcSys.setLastNPCChoice(
-            "Show me your wares",
-            "Maybe later",
-            "",
-            "Safe travels!"
-        );
+        // สร้างชาวบ้านธรรมดา (ID 0)
+        vector<string> elderMsg = {"Hello there !", "You got F."};
+        npcSys.spawnNPC(0, "map_world.json","Mystery creature", elderMsg, "npc1.png", 500.f, 400.f, 0.5f, 0.5f);
+
+        // สร้างพ่อค้า (ID 2)
+        vector<string> shopMsg = {""}; 
+        npcSys.spawnNPC(2, "map_world.json", "Merchant", shopMsg, "Merchant.png", 500.f, 300.f, 0.5f, 0.5f);
+        
+        // สร้างมอนสเตอร์บนแมพ (ID 1 = สไลม์)
+        npcSys.spawnEnemy("map_world.json", 1, "monster1.png", 800.f, 200.f, 0.5f, 0.5f);
+        npcSys.spawnEnemy("map_world.json", 1, "monster1.png", 800.f, 400.f, 0.5f, 0.5f);
+        npcSys.spawnEnemy("map_world.json", 1, "monster1.png", 800.f, 600.f, 0.5f, 0.5f);
 
         if (!map.load("map_world.json")) std::cout << "Map error\n";
         if (!playerTexture.loadFromFile("player2.png")) std::cout << "Player error\n";
@@ -110,63 +111,62 @@ public:
         sf::FloatRect bounds = player.getLocalBounds();
         player.setOrigin(bounds.width / 2.f, bounds.height / 2.f);
         player.setPosition(600.f, 600.f); 
-
+        
         fadeRect.setSize({1280, 720}); fadeRect.setFillColor(sf::Color(0, 0, 0, 0)); 
-        rpgPlayer.maxHp = 100; rpgPlayer.hp = rpgPlayer.maxHp;
-        rpgPlayer.wallet.balance = 100; 
-        rpgPlayer.level = 1; rpgPlayer.exp = 0;
-        rpgPlayer.weapon = WeaponFactory::selectWeapon(1);
-    }
+
+        rpgPlayer.maxHp = 100; rpgPlayer.hp = rpgPlayer.maxHp; 
+        rpgPlayer.maxMp = 50; rpgPlayer.mp = rpgPlayer.maxMp;
+        rpgPlayer.wallet.balance = 100;
+        rpgPlayer.level = 1; rpgPlayer.exp = 0; rpgPlayer.weapon = WeaponFactory::selectWeapon(1);
+    } 
+    // !!! จุดที่ 1: ลบปีกกาเกินที่ปิดคลาสก่อนกำหนดออกไปแล้ว !!!
 
     void saveGame() {
         std::ofstream file("save.txt");
         if (file.is_open()) {
-            file << playerName << "\n"
-                 << currentMapName << "\n"
-                 << player.getPosition().x << " " << player.getPosition().y << "\n"
-                 << rpgPlayer.hp << " " << rpgPlayer.maxHp << "\n"
-                 << rpgPlayer.level << " " << rpgPlayer.exp << "\n"
-                 << rpgPlayer.wallet.balance << "\n"
-                 // ✅ inventory จาก Potion
-                 << potion.invHP << " " << potion.invAtk << " " << potion.invCrit << "\n"
-                 << (rpgPlayer.weapon ? rpgPlayer.weapon->level : 1) << "\n"
-                 << rpgPlayer.hasFireArrow << " " << rpgPlayer.fireArrowAmmo << "\n";
-            file.close(); saveNotifTimer = 120; 
+            file << playerName << "\n" << currentMapName << "\n" << player.getPosition().x << " " << player.getPosition().y << "\n" << rpgPlayer.hp << " " << rpgPlayer.maxHp << "\n" << rpgPlayer.level << " " << rpgPlayer.exp << "\n" << rpgPlayer.wallet.balance << " " << rpgPlayer.invHP << "\n";
+            file.close(); 
+            saveNotif.setString("Game Saved!");
+            saveNotifTimer = 120;
         }
     }
 
     bool loadGame() {
         std::ifstream file("save.txt");
         if (file.is_open()) {
-            std::getline(file, playerName);
-            std::getline(file, currentMapName);
+            std::getline(file, playerName); std::getline(file, currentMapName);
             float px, py; file >> px >> py; player.setPosition(px, py);
-            file >> rpgPlayer.hp >> rpgPlayer.maxHp
-                 >> rpgPlayer.level >> rpgPlayer.exp
-                 >> rpgPlayer.wallet.balance;
-            // ✅ load inventory จาก Potion
-            file >> potion.invHP >> potion.invAtk >> potion.invCrit;
-            int wLv = 1; file >> wLv;
-            if (rpgPlayer.weapon) rpgPlayer.weapon->level = wLv;
-            file >> rpgPlayer.hasFireArrow >> rpgPlayer.fireArrowAmmo;
+            file >> rpgPlayer.hp >> rpgPlayer.maxHp >> rpgPlayer.level >> rpgPlayer.exp >> rpgPlayer.wallet.balance >> rpgPlayer.invHP;
             file.close(); map.load(currentMapName); return true;
         } return false; 
     }
 
-    void startCombat() {
-        monsterCount++; Monster monster(monsterCount);
-        monster.name   = "Monster #" + std::to_string(monsterCount);
-        monster.maxHp  = 50 + (monsterCount * 10); monster.hp = monster.maxHp;
-        monster.maxDmg = 5 + (monsterCount * 2);
-        Summary summary;
+    void startCombat(int mId) { 
+        Monster monster(mId); 
+        Summary summary; 
         bool victory = Combat::start(rpgPlayer, monster, potion, summary, window);
         if (victory) {
-            rpgPlayer.wallet.addMoney((rand() % 31) + 20);
+            rpgPlayer.wallet.addMoney((rand() % 31) + 20); 
             rpgPlayer.exp += (rand() % 100) + ((monster.maxHp / 10) + monster.maxDmg);
+            
+            // อัปเดตความคืบหน้าเควส
+            if (mId == 1) { 
+                rpgPlayer.slimesKilled++;
+                for (auto& q : rpgPlayer.questLog) {
+                    if (q.name == "Slay the Slimes" && !q.isCompleted) {
+                        q.progress = rpgPlayer.slimesKilled;
+                        if (q.progress > q.maxProgress) q.progress = q.maxProgress; 
+                        saveNotif.setString("Quest Updated: " + std::to_string(q.progress) + "/" + std::to_string(q.maxProgress));
+                        saveNotifTimer = 120;
+                    }
+                }
+            }
+
             while (rpgPlayer.exp >= rpgPlayer.getNextLevelExp()) {
-                rpgPlayer.exp -= rpgPlayer.getNextLevelExp();
-                rpgPlayer.level++; rpgPlayer.maxHp += 20;
-                rpgPlayer.hp = rpgPlayer.maxHp; rpgPlayer.baseMaxDmg += 5;   
+                rpgPlayer.exp -= rpgPlayer.getNextLevelExp(); rpgPlayer.level++; 
+                rpgPlayer.maxHp += 20; rpgPlayer.hp = rpgPlayer.maxHp; 
+                rpgPlayer.maxMp += 10; rpgPlayer.mp = rpgPlayer.maxMp;
+                rpgPlayer.baseMaxDmg += 5; 
             }
         } else { window.close(); }
     }
@@ -188,47 +188,162 @@ public:
                     if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) move.x -= 4;
                     if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) move.x += 4;
 
-                    sf::FloatRect p = player.getGlobalBounds(); p.left += 5; p.top += 5; p.width -= 10; p.height -= 10;
-                    if (!map.isSolid(p.left + move.x, p.top) && !map.isSolid(p.left + p.width + move.x, p.top + p.height)) player.move(move.x, 0);
-                    if (!map.isSolid(p.left, p.top + move.y) && !map.isSolid(p.left + p.width, p.top + p.height + move.y)) player.move(0, move.y);
+                    sf::FloatRect p = player.getGlobalBounds(); 
+                    p.left += 5; p.top += 5; p.width -= 10; p.height -= 10;
+
+                    bool canMoveX = true; bool canMoveY = true;
+                    if (map.isSolid(p.left + move.x, p.top) || map.isSolid(p.left + p.width + move.x, p.top + p.height)) canMoveX = false;
+                    if (map.isSolid(p.left, p.top + move.y) || map.isSolid(p.left + p.width, p.top + p.height + move.y)) canMoveY = false;
+
+                    sf::FloatRect px = p; px.left += move.x;
+                    sf::FloatRect py = p; py.top += move.y;
+                    for (auto& itm : itemSys.list) {
+                        if (itm.mapName == currentMapName) {
+                            sf::FloatRect iBounds = itm.imgLoaded ? itm.sprite.getGlobalBounds() : itm.fallbackBox.getGlobalBounds();
+                            if (iBounds.width > 20 && iBounds.height > 20) {
+                                iBounds.left += 5; iBounds.top += 5; iBounds.width -= 10; iBounds.height -= 10;
+                            }
+                            if (px.intersects(iBounds)) canMoveX = false;
+                            if (py.intersects(iBounds)) canMoveY = false;
+                        }
+                    }
+
+                    if (canMoveX) player.move(move.x, 0);
+                    if (canMoveY) player.move(0, move.y);
+
+                    sf::FloatRect hitBox = player.getGlobalBounds();
+                    hitBox.left += 15; hitBox.top += 15; hitBox.width -= 30; hitBox.height -= 30;
+                    for (auto it = npcSys.list.begin(); it != npcSys.list.end(); ) {
+                        if (it->mapNames == currentMapName && it->isEnemy) {
+                            if (it->sprite.getGlobalBounds().intersects(hitBox)) {
+                                int mId = it->monsterId;
+                                it = npcSys.list.erase(it);
+                                startCombat(mId); break;
+                            } else { ++it; }
+                        } else { ++it; }
+                    }
                 }
-                if (sf::Keyboard::isKeyPressed(sf::Keyboard::F)) startCombat();
             }
         } 
-        else if (gameState == 1 || gameState == 3) {  // ✅ ลบ state 6 ออก
-            if (charIdx < (int)fullMsg.length() && typeClock.getElapsedTime().asMilliseconds() > 25) {
+        else if (gameState == 1 || gameState == 3) { 
+            if (charIdx < fullMsg.length() && typeClock.getElapsedTime().asMilliseconds() > 25) {
                 currentMsg += fullMsg[charIdx]; charIdx++; typeClock.restart();
             }
             dialogText.setString(currentMsg);
         }
-
         if (saveNotifTimer > 0) saveNotifTimer--;
         fadeRect.setFillColor(sf::Color(0, 0, 0, (sf::Uint8)alpha));
     }
 
     void render() {
-        window.clear();
-        window.draw(map);
-        npcSys.drawAll(window, currentMapName);
-        window.draw(player); 
-
-        if (gameState >= 1) {
-            window.draw(dialogBox);
-            window.draw(dialogName);
-            window.draw(dialogText);
+        window.clear(); window.draw(map); itemSys.drawAll(window, currentMapName); npcSys.drawAll(window, currentMapName); window.draw(player); 
+        
+        if (gameState >= 1 && gameState <= 3) {
+            window.draw(dialogBox); window.draw(dialogName); window.draw(dialogText);
+            if (gameState == 2) {
+                optA.setString("-> " + talkingTo->choiceA); optB.setString("-> " + talkingTo->choiceB);
+                optA.setFillColor(currentOption == 0 ? sf::Color::Red : sf::Color::White);
+                optB.setFillColor(currentOption == 1 ? sf::Color::Red : sf::Color::White);
+                window.draw(optA); window.draw(optB);
+            }
         }
 
-        if (gameState == 2) {
-            optA.setString("-> " + talkingTo->choiceA);
-            optB.setString("-> " + talkingTo->choiceB);
-            optA.setFillColor(currentOption == 0 ? sf::Color::Red : sf::Color::White);
-            optB.setFillColor(currentOption == 1 ? sf::Color::Red : sf::Color::White);
-            window.draw(optA); window.draw(optB);
+        if (gameState == 5) {
+            sf::RectangleShape menuBg({1000.f, 600.f}); menuBg.setFillColor(sf::Color(20, 20, 40, 240)); 
+            menuBg.setOutlineThickness(4.f); menuBg.setOutlineColor(sf::Color::White); menuBg.setPosition(140.f, 60.f); window.draw(menuBg);
+
+            sf::Text tabStatus("[ STATUS ]", font, 28); tabStatus.setPosition(170.f, 90.f);
+            sf::Text tabInv("[ INVENTORY ]", font, 28); tabInv.setPosition(350.f, 90.f);
+            sf::Text tabQuest("[ QUESTS ]", font, 28);  tabQuest.setPosition(580.f, 90.f);
+            sf::Text tabSkill("[ SKILLS ]", font, 28);  tabSkill.setPosition(780.f, 90.f);
+            
+            tabStatus.setFillColor(currentMenuTab == 0 ? sf::Color::Yellow : sf::Color(100,100,100));
+            tabInv.setFillColor(currentMenuTab == 1 ? sf::Color::Yellow : sf::Color(100,100,100));
+            tabQuest.setFillColor(currentMenuTab == 2 ? sf::Color::Yellow : sf::Color(100,100,100));
+            tabSkill.setFillColor(currentMenuTab == 3 ? sf::Color::Yellow : sf::Color(100,100,100));
+            
+            window.draw(tabStatus); window.draw(tabInv); window.draw(tabQuest); window.draw(tabSkill);
+
+            sf::RectangleShape line({960.f, 2.f}); line.setFillColor(sf::Color::White); line.setPosition(160.f, 140.f); window.draw(line);
+
+            int maxVisible = 10; // โชว์มากสุด 10 บรรทัดต่อหน้า
+
+            if (currentMenuTab == 0) {
+                sf::Text sTitle("--- CHARACTER STATUS ---", font, 30);
+                sTitle.setFillColor(sf::Color::Cyan); sTitle.setPosition(180.f, 170.f); window.draw(sTitle);
+                string statStr = "Name: " + playerName + "\n\nLevel: " + std::to_string(rpgPlayer.level) + "\nEXP: " + std::to_string(rpgPlayer.exp) + " / " + std::to_string(rpgPlayer.getNextLevelExp()) + "\n\nHP: " + std::to_string(rpgPlayer.hp) + " / " + std::to_string(rpgPlayer.maxHp) + "\nMP: " + std::to_string(rpgPlayer.mp) + " / " + std::to_string(rpgPlayer.maxMp) + "\n\nBase Dmg: " + std::to_string(rpgPlayer.baseMaxDmg) + "\nWeapon: " + (rpgPlayer.weapon ? rpgPlayer.weapon->name : "None") + "\nCrit Chance: " + std::to_string(5 + (rpgPlayer.weapon ? rpgPlayer.weapon->getCritChance() : 0)) + "%\n\nGold: " + std::to_string(rpgPlayer.wallet.balance) + " G\n";
+                sf::Text sText(statStr, font, 26); sText.setFillColor(sf::Color::White); sText.setPosition(180.f, 230.f); window.draw(sText);
+            } 
+            else if (currentMenuTab == 1) { 
+                int startIndex = 0;
+                if (menuSelection >= maxVisible) startIndex = menuSelection - maxVisible + 1;
+                int endIndex = std::min((int)rpgPlayer.inventory.size(), startIndex + maxVisible);
+
+                for (int i = startIndex; i < endIndex; i++) {
+                    sf::Text t(rpgPlayer.inventory[i].name + " (x" + std::to_string(rpgPlayer.inventory[i].amount) + ")", font, 26);
+                    t.setPosition(180.f, 170.f + ((i - startIndex) * 40.f)); 
+                    t.setFillColor(i == menuSelection ? sf::Color::Cyan : sf::Color::White);
+                    if (i == menuSelection) t.setString("> " + t.getString());
+                    window.draw(t);
+                }
+                if (rpgPlayer.inventory.size() > 0) {
+                    sf::RectangleShape vLine({2.f, 450.f}); vLine.setFillColor(sf::Color(100, 100, 100)); vLine.setPosition(580.f, 150.f); window.draw(vLine);
+                    sf::Text descTitle("[ ITEM INFO ]", font, 24); descTitle.setFillColor(sf::Color::Yellow); descTitle.setPosition(610.f, 170.f); window.draw(descTitle);
+                    
+                    sf::Text desc(rpgPlayer.inventory[menuSelection].desc, font, 24);
+                    desc.setFillColor(sf::Color(200, 200, 200)); desc.setPosition(610.f, 220.f); window.draw(desc);
+                }
+            } 
+            else if (currentMenuTab == 2) { 
+                int startIndex = 0;
+                if (menuSelection >= maxVisible) startIndex = menuSelection - maxVisible + 1;
+                int endIndex = std::min((int)rpgPlayer.questLog.size(), startIndex + maxVisible);
+
+                for (int i = startIndex; i < endIndex; i++) {
+                    string status = rpgPlayer.questLog[i].isCompleted ? "[DONE] " : "[ACTIVE] ";
+                    string prog = " (" + std::to_string(rpgPlayer.questLog[i].progress) + "/" + std::to_string(rpgPlayer.questLog[i].maxProgress) + ")";
+                    if (rpgPlayer.questLog[i].maxProgress == 0) prog = ""; 
+
+                    sf::Text t(status + rpgPlayer.questLog[i].name + prog, font, 26);
+                    t.setPosition(180.f, 170.f + ((i - startIndex) * 40.f)); 
+                    t.setFillColor(i == menuSelection ? sf::Color::Cyan : (rpgPlayer.questLog[i].isCompleted ? sf::Color(100,255,100) : sf::Color::White));
+                    if (i == menuSelection) t.setString("> " + t.getString());
+                    window.draw(t);
+                }
+                if (rpgPlayer.questLog.size() > 0) {
+                    sf::RectangleShape vLine({2.f, 450.f}); vLine.setFillColor(sf::Color(100, 100, 100)); vLine.setPosition(580.f, 150.f); window.draw(vLine);
+                    sf::Text descTitle("[ QUEST INFO ]", font, 24); descTitle.setFillColor(sf::Color::Yellow); descTitle.setPosition(610.f, 170.f); window.draw(descTitle);
+                    
+                    sf::Text desc(rpgPlayer.questLog[menuSelection].desc, font, 24);
+                    desc.setFillColor(sf::Color(200, 200, 200)); desc.setPosition(610.f, 220.f); window.draw(desc);
+                }
+            } 
+            else if (currentMenuTab == 3) { 
+                int startIndex = 0;
+                if (menuSelection >= maxVisible) startIndex = menuSelection - maxVisible + 1;
+                int endIndex = std::min((int)rpgPlayer.learnedSkills.size(), startIndex + maxVisible);
+
+                for (int i = startIndex; i < endIndex; i++) {
+                    sf::Text t(rpgPlayer.learnedSkills[i].name, font, 26);
+                    t.setPosition(180.f, 170.f + ((i - startIndex) * 40.f)); 
+                    t.setFillColor(i == menuSelection ? sf::Color::Cyan : sf::Color::White);
+                    if (i == menuSelection) t.setString("> " + t.getString());
+                    if (i == rpgPlayer.equippedSkillIndex) { t.setString(t.getString() + "  [E]"); t.setFillColor(sf::Color::Green); }
+                    window.draw(t);
+                }
+                if (rpgPlayer.learnedSkills.size() > 0) {
+                    sf::RectangleShape vLine({2.f, 450.f}); vLine.setFillColor(sf::Color(100, 100, 100)); vLine.setPosition(580.f, 150.f); window.draw(vLine);
+                    sf::Text descTitle("[ SKILL INFO ]", font, 24); descTitle.setFillColor(sf::Color::Yellow); descTitle.setPosition(610.f, 170.f); window.draw(descTitle);
+                    
+                    Skill selSkill = rpgPlayer.learnedSkills[menuSelection];
+                    sf::Text desc("Cost: " + std::to_string(selSkill.mpCost) + " MP\n\n" + selSkill.desc, font, 24);
+                    desc.setFillColor(sf::Color(200, 200, 200)); desc.setPosition(610.f, 220.f); window.draw(desc);
+                }
+            }
         }
 
         if (saveNotifTimer > 0) window.draw(saveNotif);
-        window.draw(fadeRect);
-        window.display();
+        window.draw(fadeRect); window.display();
     }
 
     void run() {
@@ -244,11 +359,9 @@ public:
         
         if (!skipNaming) {
             sf::Text nameTitle("Enter Your Name", font, 50); nameTitle.setFillColor(sf::Color::Yellow);
-            sf::FloatRect bounds = nameTitle.getLocalBounds(); nameTitle.setOrigin(bounds.width / 2.f, bounds.height / 2.f); nameTitle.setPosition(1280.f / 2.f, 200.f);
+            sf::FloatRect bounds = nameTitle.getLocalBounds(); nameTitle.setOrigin(bounds.width / 2.f, bounds.height / 2.f);
+            nameTitle.setPosition(1280.f / 2.f, 200.f);
             sf::Text nameInput("", font, 60); nameInput.setFillColor(sf::Color::White);
-            sf::Text confirmHint("Press ENTER to start", font, 30); confirmHint.setFillColor(sf::Color(150, 150, 150));
-            bounds = confirmHint.getLocalBounds(); confirmHint.setOrigin(bounds.width / 2.f, bounds.height / 2.f); confirmHint.setPosition(1280.f / 2.f, 500.f);
-
             playerName = ""; bool isNaming = true;
             while (isNaming && window.isOpen()) {
                 sf::Event e;
@@ -256,14 +369,14 @@ public:
                     if (e.type == sf::Event::Closed) { window.close(); return; }
                     if (e.type == sf::Event::TextEntered) {
                         if (e.text.unicode == 8) { if (!playerName.empty()) playerName.pop_back(); }
-                        else if (e.text.unicode == 13) { if (!playerName.empty()) isNaming = false; }
-                        else if (e.text.unicode < 128 && e.text.unicode > 31 && playerName.length() < 12) playerName += static_cast<char>(e.text.unicode);
+                        else if (e.text.unicode == 13 && !playerName.empty()) isNaming = false;
+                        else if (e.text.unicode < 128 && e.text.unicode > 31 && playerName.length() < 12) playerName += (char)e.text.unicode;
                     }
                 }
-                nameInput.setString(playerName + "_"); bounds = nameInput.getLocalBounds();
-                nameInput.setOrigin(bounds.width / 2.f, bounds.height / 2.f); nameInput.setPosition(1280.f / 2.f, 350.f);
-                window.clear(sf::Color(20, 20, 30)); window.draw(nameTitle); window.draw(nameInput);
-                if (!playerName.empty()) window.draw(confirmHint); window.display();
+                nameInput.setString(playerName + "_"); 
+                bounds = nameInput.getLocalBounds(); nameInput.setOrigin(bounds.width / 2.f, bounds.height / 2.f);
+                nameInput.setPosition(1280.f / 2.f, 350.f);
+                window.clear(sf::Color(20, 20, 30)); window.draw(nameTitle); window.draw(nameInput); window.display();
             }
         }
 
@@ -271,78 +384,163 @@ public:
             sf::Event e;
             while (window.pollEvent(e)) {
                 if (e.type == sf::Event::Closed) window.close();
-
                 if (e.type == sf::Event::KeyPressed) {
                     if (e.key.code == sf::Keyboard::F5) saveGame();
+                    
+                    if (gameState == 0) {
+                        if (e.key.code == sf::Keyboard::Tab) { gameState = 5; currentMenuTab = 0; menuSelection = 0; }
+                        
+                        else if (e.key.code == sf::Keyboard::F) {
+                            sf::FloatRect pickupBox = player.getGlobalBounds();
+                            pickupBox.left -= 50; pickupBox.top -= 50; pickupBox.width += 100; pickupBox.height += 100;
 
-                    // ─── State 0: กด E คุย ───────────────────────────────
-                    if (gameState == 0 && e.key.code == sf::Keyboard::E) {
-                        bool interactedWithNPC = false;
-                        for (auto& npc : npcSys.list) {
-                            if (npc.mapNames == currentMapName && npc.isPlayerNear(player.getGlobalBounds())) {
-                                gameState = 1; talkingTo = &npc; currentDialogPage = 0; 
-                                fullMsg = talkingTo->messages[currentDialogPage];
-                                currentMsg = ""; charIdx = 0; dialogName.setString(talkingTo->name); typeClock.restart();
-                                interactedWithNPC = true; break; 
+                            for (auto it = itemSys.list.begin(); it != itemSys.list.end(); ) {
+                                sf::FloatRect itemBounds = it->imgLoaded ? it->sprite.getGlobalBounds() : it->fallbackBox.getGlobalBounds();
+                                if (it->mapName == currentMapName && pickupBox.intersects(itemBounds)) {
+                                    bool found = false;
+                                    for (auto& invItem : rpgPlayer.inventory) {
+                                        if (invItem.name == it->itemData.name) {
+                                            invItem.amount += it->itemData.amount;
+                                            found = true; break;
+                                        }
+                                    }
+                                    if (!found) rpgPlayer.inventory.push_back(it->itemData);
+                                    
+                                    saveNotif.setString("Picked up: " + it->itemData.name + "!");
+                                    saveNotifTimer = 120;
+                                    it = itemSys.list.erase(it);
+                                    break; 
+                                } else {
+                                    ++it;
+                                }
                             }
                         }
-                        if (!interactedWithNPC) {
-                            sf::FloatRect warpCheck = player.getGlobalBounds(); warpCheck.left -= 25; warpCheck.top -= 25; warpCheck.width += 50; warpCheck.height += 50;
+                        
+                        else if (e.key.code == sf::Keyboard::E) {
+                            for (auto& npc : npcSys.list) {
+                                if (npc.mapNames == currentMapName && npc.isPlayerNear(player.getGlobalBounds())) {
+
+                                    // !!! จุดที่ 2: เติมปีกกาปิดให้เงื่อนไขร้านค้าแล้ว !!!
+                                    if (npc.npcId == 2) {
+                                        Shop::open(rpgPlayer, potion, window, font);
+                                        break; 
+                                    } 
+                                        
+                                    else if (npc.npcId == 1) { 
+                                        bool hasQuest = false; bool isDone = false;
+                                        for (auto& q : rpgPlayer.questLog) {
+                                            if (q.name == "Slay the Slimes") { hasQuest = true; isDone = q.isCompleted; break; }
+                                        }
+
+                                        if (!hasQuest) {
+                                            npc.messages = {"Greetings, hero!", "We have a slime problem.", "Can you kill 3 slimes for us?"};
+                                            npc.setChoices("I will do it!", "No time.", "Thank you! Good luck.", "Come back if you change your mind.");
+                                        } 
+                                        else if (hasQuest && rpgPlayer.slimesKilled < 3) {
+                                            npc.messages = {"You haven't killed 3 slimes yet!", "Go to the forest!"};
+                                            npc.hasChoice = false; 
+                                        } 
+                                        else if (hasQuest && rpgPlayer.slimesKilled >= 3 && !isDone) {
+                                            npc.messages = {"Incredible! You defeated the slimes!", "Here is your reward: 150 Gold and a Magic Potion!"};
+                                            npc.hasChoice = false;
+                                            
+                                            rpgPlayer.wallet.addMoney(150);
+                                            rpgPlayer.inventory.push_back({"Magic Potion", "Restores 50 HP", 1, 50});
+                                            
+                                            saveNotif.setString("Quest Completed! Got 150G & Potion!");
+                                            saveNotifTimer = 180;
+
+                                            for (auto& q : rpgPlayer.questLog) {
+                                                if (q.name == "Slay the Slimes") q.isCompleted = true;
+                                            }
+                                        } 
+                                        else {
+                                            npc.messages = {"Thanks for your help earlier!", "The village is safe."};
+                                            npc.hasChoice = false;
+                                        }
+                                    }
+
+                                    gameState = 1; talkingTo = &npc; currentDialogPage = 0; 
+                                    fullMsg = talkingTo->messages[0]; currentMsg = ""; charIdx = 0; 
+                                    dialogName.setString(talkingTo->name); typeClock.restart(); break;
+                                }
+                            }
                             for (auto& w : map.warps) {
-                                if (warpCheck.intersects(w.rect)) {
-                                    if (!w.nextMap.empty() && !isFading && alpha == 0) {
-                                        isFading = true; pendingMap = w.nextMap; break;
+                                if (player.getGlobalBounds().intersects(w.rect)) {
+                                    isFading = true; pendingMap = w.nextMap; break;
+                                }
+                            }
+                        }
+                    }
+                    else if (gameState == 1 && e.key.code == sf::Keyboard::Space) {
+                        if (charIdx < fullMsg.length()) { currentMsg = fullMsg; charIdx = fullMsg.length(); }
+                        else {
+                            currentDialogPage++;
+                            if (currentDialogPage < talkingTo->messages.size()) {
+                                fullMsg = talkingTo->messages[currentDialogPage]; currentMsg = ""; charIdx = 0;
+                            } else {
+                                if (talkingTo->hasChoice) { gameState = 2; currentOption = 0; }
+                                else { gameState = 0; }
+                            }
+                        }
+                    }
+                    else if (gameState == 2) {
+                        if (e.key.code == sf::Keyboard::W) currentOption = 0;
+                        if (e.key.code == sf::Keyboard::S) currentOption = 1;
+                        if (e.key.code == sf::Keyboard::Space) {
+                            gameState = 3; fullMsg = (currentOption == 0) ? talkingTo->replyA : talkingTo->replyB;
+                            currentMsg = ""; charIdx = 0;
+                        }
+                    }
+                    else if (gameState == 3 && e.key.code == sf::Keyboard::Space) { 
+                        if (talkingTo && talkingTo->npcId == 1 && currentOption == 0) { 
+                            bool hasQuest = false;
+                            for (auto& q : rpgPlayer.questLog) { if (q.name == "Slay the Slimes") hasQuest = true; }
+                            
+                            if (!hasQuest) { 
+                                Quest newQuest = {"Slay the Slimes", "Defeat 3 slimes outside the village.", false, 0, 3};
+                                rpgPlayer.questLog.push_back(newQuest);
+                                saveNotif.setString("New Quest Accepted!");
+                                saveNotifTimer = 120;
+                            }
+                        }
+                        gameState = 0; talkingTo = nullptr; 
+                    }
+                    
+                    else if (gameState == 5) { 
+                        if (e.key.code == sf::Keyboard::Tab || e.key.code == sf::Keyboard::Escape) gameState = 0;
+                        if (e.key.code == sf::Keyboard::A) { currentMenuTab = (currentMenuTab > 0) ? currentMenuTab - 1 : 0; menuSelection = 0; }
+                        if (e.key.code == sf::Keyboard::D) { currentMenuTab = (currentMenuTab < 3) ? currentMenuTab + 1 : 3; menuSelection = 0; } 
+                        if (currentMenuTab > 0) {
+                            if (e.key.code == sf::Keyboard::W && menuSelection > 0) menuSelection--;
+                            if (e.key.code == sf::Keyboard::S) {
+                                int maxItems = 0;
+                                if (currentMenuTab == 1) maxItems = rpgPlayer.inventory.size();
+                                else if (currentMenuTab == 2) maxItems = rpgPlayer.questLog.size();
+                                else if (currentMenuTab == 3) maxItems = rpgPlayer.learnedSkills.size();
+                                if (maxItems > 0 && menuSelection < maxItems - 1) menuSelection++;
+                            }
+                        }
+                        if (e.key.code == sf::Keyboard::Enter || e.key.code == sf::Keyboard::Space) {
+                            if (currentMenuTab == 3) rpgPlayer.equippedSkillIndex = menuSelection;
+                            else if (currentMenuTab == 1) { 
+                                if (rpgPlayer.inventory.size() > 0) {
+                                    if (rpgPlayer.inventory[menuSelection].healHp > 0 && rpgPlayer.inventory[menuSelection].amount > 0) {
+                                        rpgPlayer.hp += rpgPlayer.inventory[menuSelection].healHp;
+                                        if (rpgPlayer.hp > rpgPlayer.maxHp) rpgPlayer.hp = rpgPlayer.maxHp;
+                                        rpgPlayer.inventory[menuSelection].amount--;
+                                        if (rpgPlayer.inventory[menuSelection].amount <= 0) {
+                                            rpgPlayer.inventory.erase(rpgPlayer.inventory.begin() + menuSelection);
+                                            if (menuSelection > 0) menuSelection--;
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                    // ─── State 1: คุยปกติ ────────────────────────────────
-                    else if (gameState == 1 && e.key.code == sf::Keyboard::Space) {
-                        if (charIdx < (int)fullMsg.length()) {
-                            currentMsg = fullMsg; charIdx = fullMsg.length();
-                        } else {
-                            currentDialogPage++;
-                            if (currentDialogPage < (int)talkingTo->messages.size()) {
-                                fullMsg = talkingTo->messages[currentDialogPage];
-                                currentMsg = ""; charIdx = 0; typeClock.restart();
-                            } else {
-                                if (talkingTo->hasChoice) {
-                                    gameState = 2; currentOption = 0;
-                                } else {
-                                    gameState = 0; talkingTo = nullptr;
-                                }
-                            }
-                        }
-                    }
-                    // ─── State 2: เลือกตอบ ───────────────────────────────
-                    else if (gameState == 2) {
-                        if (e.key.code == sf::Keyboard::W || e.key.code == sf::Keyboard::Up)   currentOption = 0;
-                        if (e.key.code == sf::Keyboard::S || e.key.code == sf::Keyboard::Down) currentOption = 1;
-                        if (e.key.code == sf::Keyboard::Space || e.key.code == sf::Keyboard::Enter) {
-                            // ✅ Merchant → เปิด Shop.h โดยตรง
-                            if (currentOption == 0 && talkingTo->name == "Merchant") {
-                                Shop::open(rpgPlayer, potion, window, font);
-                                gameState = 0; talkingTo = nullptr;
-                            } else {
-                                gameState = 3;
-                                fullMsg = (currentOption == 0) ? talkingTo->replyA : talkingTo->replyB;
-                                currentMsg = ""; charIdx = 0; typeClock.restart();
-                            }
-                        }
-                    }
-                    // ─── State 3: โชว์ผลตอบ ─────────────────────────────
-                    else if (gameState == 3 && e.key.code == sf::Keyboard::Space) {
-                        if (charIdx < (int)fullMsg.length()) {
-                            currentMsg = fullMsg; charIdx = fullMsg.length();
-                        } else {
-                            gameState = 0; talkingTo = nullptr;
-                        }
-                    }
                 }
             }
-            update(); 
-            render();
+            update(); render();
         }
     }
 };

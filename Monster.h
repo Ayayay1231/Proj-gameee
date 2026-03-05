@@ -1,118 +1,95 @@
 #ifndef MONSTER_H
 #define MONSTER_H
 #include <SFML/Graphics.hpp>
+#include <iostream>
 #include <string>
-#include <cstdlib>
-
 using namespace std;
 
 class Monster {
 public:
     string name;
-    int hp, maxHp, maxDmg;
-
-    // สถานะเดิม
-    int bleedTurn = 0, stunTurn = 0, vulnTurn = 0;
-
-    // สถานะโลกซอมบี้
-    int  infectedTurn = 0;
-    int  burnTurn     = 0;   // 🔥
-    bool rotten       = false;
-    bool frenzy       = false;
-
+    int hp, maxHp, maxDmg; 
+    int bleedTurn = 0;
+    int stunTurn = 0;
+    int vulnTurn = 0;
+    int burnTurn = 0;
     sf::Texture texture;
-    sf::Sprite  sprite;
+    sf::Sprite sprite;
 
-    Monster(int rank) {
-        name   = "Zombie #" + to_string(rank);
-        maxHp  = 50 + (rank * 10);
-        hp     = maxHp;
-        maxDmg = 5  + (rank * 2);
-        if (texture.loadFromFile("monster1.png")) {
+     string imgpath = "";
+        bool isBoss = false;       // ตัวนี้เป็นบอสไหม?
+        bool ultiUsed = false;     // ใช้ท่าไม้ตายไปหรือยัง? (ป้องกันการสแปม)
+        int ultiThreshold = 0;     // เลือดต้องต่ำกว่าเท่าไหร่ถึงจะใช้ท่านี้
+        string ultiName = "";      // ชื่อท่าไม้ตาย
+        int ultiDmg = 0;           // ดาเมจของท่าไม้ตาย
+
+
+    // เปลี่ยนจากรับ (int rank) มาเป็นรับ (int monsterId) แทน
+    Monster(int monsterId) {
+       
+        // ==========================================
+        // สร้างข้อมูลมอนสเตอร์เตรียมไว้กี่ตัวก็ได้!
+        // ==========================================
+        if (monsterId == 1) {
+            name = "Slime";
+            maxHp = 30;
+            maxDmg = 5;
+            imgpath = "monster1.png";
+        } 
+        else if (monsterId == 2) {
+            name = "Goblin";
+            maxHp = 60;
+            maxDmg = 12;
+            imgpath = "monster2.png";
+        } 
+        else if (monsterId == 3) {
+            name = "Orc Warrior";
+            maxHp = 120;
+            maxDmg = 20;
+            imgpath = "monster3.png";
+        }
+        else if (monsterId == 99) {
+            // เผื่อทำบอสลับ!
+            name = "Aymie the devil pig";
+            maxHp = 500;
+            maxDmg = 45;
+            imgpath = "bosstrue.png";
+
+            isBoss = true;
+            ultiThreshold = 250;     // ถ้าเลือดลดเหลือ 250 (ครึ่งหลอด) จะคลั่ง!
+            ultiName = "HELLFIRE BLAST"; 
+            ultiDmg = 50;
+        }
+        else {
+            // ถ้าใส่เลขผิด ให้เป็นตัวนี้แทน
+            name = "Missingno";
+            maxHp = 10; maxDmg = 1;
+            imgpath = "monster1.png";
+        }
+
+        hp = maxHp; 
+
+        if(!texture.loadFromFile(imgpath)){
+            cout << "cannot load " << imgpath << endl;
+        }else{
             sprite.setTexture(texture);
-            sprite.setPosition(150.f, 50.f);
+            
+            // ==========================================
+            // ปรับขนาดรูปมอนสเตอร์ "ในฉากสู้" ให้เท่ากันทุกตัว!
+            // ==========================================
+            float targetWidth = 400.f;  // ความกว้างที่อยากได้ในฉากสู้ (พิกเซล)
+            float targetHeight = 400.f; // ความสูงที่อยากได้ในฉากสู้ (พิกเซล)
+
+            // ดึงขนาดไฟล์รูปต้นฉบับ
+            float origWidth = texture.getSize().x;
+            float origHeight = texture.getSize().y;
+
+            // สั่งคำนวณและปรับสเกล
+            sprite.setScale(targetWidth / origWidth, targetHeight / origHeight);
+            
+            // จัดตำแหน่งให้อยู่ทางขวาของจอพอดีๆ ในฉากสู้
+            sprite.setPosition(400.f, 150.f); 
         }
-    }
-
-    // ✅ สุ่มติด infected 30% — เรียกหลังโจมตีธรรมดา [C]
-    void tryInflictInfected() {
-        if (infectedTurn > 0) return;
-        if (rand() % 100 < 30)
-            infectedTurn = 3;
-    }
-
-    // ✅ สุ่มติด burn 35% — เรียกหลังยิงธนูไฟ [F]
-    void tryInflictBurn() {
-        if (burnTurn > 0) return;
-        if (rand() % 100 < 35)
-            burnTurn = 3;
-    }
-
-    // ✅ ประมวลผลสถานะต้นเทิร์น — คืน log ให้ Combat แสดง
-    string applyStatusEffects() {
-        string log = "";
-
-        // 🦠 infected: ลด 3 HP/เทิร์น
-        if (infectedTurn > 0) {
-            hp -= 3;
-            log += name + " takes 3 dmg from INFECTION! \n";
-            infectedTurn--;
-            if (infectedTurn == 0) {
-                rotten = true;
-                log += name + " has ROTTED!\n";
-            }
-        }
-
-        // 🔥 burn: ลด 5 HP/เทิร์น (x2 ถ้า rotten)
-        if (burnTurn > 0) {
-            int burnDmg = rotten ? 10 : 5;
-            hp -= burnDmg;
-            log += name + " takes " + to_string(burnDmg) + " dmg from BURN!"
-                 + (rotten ? " (x2 ROTTEN!)" : "") + "\n";
-            burnTurn--;
-        }
-
-        // 👁️ frenzy auto-trigger เมื่อ HP < 30%
-        if (!frenzy && hp < maxHp * 0.3f) {
-            frenzy = true;
-            log += name + " enters FRENZY!\n";
-        }
-
-        return log;
-    }
-
-    // ✅ ดาเมจจริงที่มอนตี (รวม rotten/frenzy)
-    int getActualDmg() {
-        int dmg = maxDmg;
-        if (rotten) dmg = dmg / 2;
-        if (frenzy) dmg = dmg * 3 / 2;
-        return max(1, dmg);
-    }
-
-    // ✅ frenzy ตี 2 ครั้ง/เทิร์น
-    int getAttackCount() {
-        return frenzy ? 2 : 1;
-    }
-
-    // ✅ ตัวคูณดาเมจที่มอนรับ
-    float getDefMultiplier() {
-        float m = 1.0f;
-        if (rotten) m *= 1.3f;
-        if (frenzy) m *= 1.2f;
-        return m;
-    }
-
-    // ✅ infected ป้องกัน stun และ bleed
-    bool isImmuneToStun()  const { return infectedTurn > 0; }
-    bool isImmuneToBleed() const { return infectedTurn > 0; }
-
-    // ✅ rotten: 40% spawn mini zombie เมื่อตาย
-    bool shouldSpawnOnDeath() const {
-        return rotten && (rand() % 100 < 40);
-    }
-
-    void draw(sf::RenderWindow& window) {
-        window.draw(sprite);
-    }
-};
+    } // ปิด Constructor
+};    // ปิด Class
 #endif
