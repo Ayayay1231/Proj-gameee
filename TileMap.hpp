@@ -8,10 +8,10 @@
 #include <vector>
 #include <iostream>
 #include <algorithm> 
+#include <memory> 
 
 using json = nlohmann::json;
 
-// Bitmask ป้องกันแมพแตกเวลาเผลอหมุนกระเบื้องใน Tiled
 const unsigned FLIPPED_HORIZONTALLY_FLAG = 0x80000000;
 const unsigned FLIPPED_VERTICALLY_FLAG   = 0x40000000;
 const unsigned FLIPPED_DIAGONALLY_FLAG   = 0x20000000;
@@ -24,13 +24,12 @@ public:
     int mapW = 0, mapH = 0, tileW = 32, tileH = 32;
 
 private:
-    struct LayerData { sf::VertexArray va; sf::Texture* tex; };
+    struct LayerData { sf::VertexArray va; std::shared_ptr<sf::Texture> tex; }; 
     std::vector<LayerData> m_layers;
 
-    // เก็บข้อมูล Tileset ให้แน่นขึ้น ป้องกัน Texture หลุด
     struct TilesetData {
         int firstGid;
-        sf::Texture tex;
+        std::shared_ptr<sf::Texture> tex; 
         int columns;
         int tsTileW;
         int tsTileH;
@@ -50,7 +49,9 @@ public:
         mapW = data["width"]; mapH = data["height"];
         tileW = data["tilewidth"]; tileH = data["tileheight"];
 
-        // 1. โหลดข้อมูล Tilesets ให้ครบก่อน
+        // เซ็ตเริ่มต้นให้ "เดินไม่ได้เลย" (Solid) ทั่วทั้งแมพ
+        collisionLayer.assign(mapW * mapH, 1);
+
         for (auto& ts : data["tilesets"]) {
             TilesetData td;
             td.firstGid = ts["firstgid"];
@@ -61,53 +62,65 @@ public:
             size_t lastSlash = imgPath.find_last_of("/\\");
             std::string fileName = (lastSlash == std::string::npos) ? imgPath : imgPath.substr(lastSlash + 1);
             
-            if (td.tex.loadFromFile(fileName)) {
-                // คำนวณคอลัมน์ของแผ่นนั้นๆ (กันภาพสัดส่วนเพี้ยน)
-                td.columns = ts.contains("columns") ? (int)ts["columns"] : (td.tex.getSize().x / td.tsTileW);
-                m_tilesets.push_back(std::move(td));
+            td.tex = std::make_shared<sf::Texture>(); 
+            if (td.tex->loadFromFile(fileName)) {
+                td.columns = ts.contains("columns") ? (int)ts["columns"] : (td.tex->getSize().x / td.tsTileW);
+                m_tilesets.push_back(td);
             } else {
                 std::cout << "ERROR: Load Texture Failed -> " << fileName << std::endl;
             }
         }
 
-        // เรียง Tileset จาก ID มากไปน้อย เพื่อให้ค้นหาแผ่นที่ถูกต้องง่ายขึ้น
         std::sort(m_tilesets.begin(), m_tilesets.end(), [](const TilesetData& a, const TilesetData& b) {
             return a.firstGid > b.firstGid;
         });
 
-        // 2. ลุยโหลด Layers ของจริง
         for (auto& layer : data["layers"]) {
             if (layer["type"] == "tilelayer") {
-                // โหลดเป็น unsigned เพื่อรองรับ Bitmask ตัวเลขใหญ่ๆ
                 auto d = layer["data"].get<std::vector<unsigned int>>(); 
                 
-                if (layer["name"] == "walls" || layer["name"] == "House") {
-                    for (auto val : d) {
-                        // ตัด Bitmask ทิ้งก่อนเก็บลง Collision
-                        collisionLayer.push_back((int)(val & ~(FLIPPED_HORIZONTALLY_FLAG | FLIPPED_VERTICALLY_FLAG | FLIPPED_DIAGONALLY_FLAG)));
-                    }
-                }
+                // 🟢 ระบบกรองชื่อเลเยอร์แบบขั้นเทพ (กันบั๊กพิมพ์ผิด/เคาะสเปซบาร์)
+                std::string ln = layer["name"];
+                std::transform(ln.begin(), ln.end(), ln.begin(), ::tolower); // แปลงเป็นพิมพ์เล็กหมด
+                ln.erase(std::remove(ln.begin(), ln.end(), ' '), ln.end());  // ตัดช่องว่างทิ้งหมด
 
-                // สร้างกระดาษวาดรูป (VertexArray) แยกตามแผ่น Tileset ในเลเยอร์นี้
+                bool isWalkableLayer = false;
+                
+                if (jsonFile.find("village") != std::string::npos) { isWalkableLayer = (ln == "path"); }
+                else if (jsonFile.find("homie") != std::string::npos) { isWalkableLayer = (ln == "floor" || ln == "prom" || ln == "layer3"); }
+                else if (jsonFile.find("tunnel") != std::string::npos) { isWalkableLayer = (ln == "floor"); }
+                else if (jsonFile.find("lastboss") != std::string::npos) { isWalkableLayer = (ln == "floor"); }
+                else if (jsonFile.find("store") != std::string::npos) { isWalkableLayer = (ln == "prom" || ln == "floor"); }
+                else if (jsonFile.find("church") != std::string::npos) { isWalkableLayer = (ln == "prom" || ln == "floor"); }
+                else if (jsonFile.find("underground") != std::string::npos) { isWalkableLayer = (ln == "prom" || ln == "floor"); }
+                
+                // 🟢 เพิ่ม hima ให้ abandon ตรงนี้แล้ว!
+                else if (jsonFile.find("abandon") != std::string::npos) { isWalkableLayer = (ln == "path" || ln == "hima"); }
+
                 std::map<int, LayerData> layerVertexArrays;
                 for (auto& ts : m_tilesets) {
-                    layerVertexArrays[ts.firstGid].tex = &ts.tex;
+                    layerVertexArrays[ts.firstGid].tex = ts.tex;
                     layerVertexArrays[ts.firstGid].va.setPrimitiveType(sf::Quads);
                 }
 
                 for (int y = 0; y < mapH; y++) {
                     for (int x = 0; x < mapW; x++) {
-                        unsigned raw_gid = d[x + y * mapW];
-                        
-                        //  พระเอกอยู่ตรงนี้: สาง Bitmask กลับหน้า/หลัง/บน/ล่าง ทิ้งให้หมด!
+                        int idx = x + y * mapW;
+                        unsigned raw_gid = d[idx];
                         unsigned gid = raw_gid & ~(FLIPPED_HORIZONTALLY_FLAG | FLIPPED_VERTICALLY_FLAG | FLIPPED_DIAGONALLY_FLAG);
 
-                        if (gid == 0) continue; // ข้ามช่องว่าง
+                        if (gid == 0) continue; // ข้ามช่องว่างไป
 
-                        // หาว่า ID นี้เป็นของ Texture แผ่นไหน
+                        // อัปเดตการชน
+                        if (isWalkableLayer) {
+                            collisionLayer[idx] = 0; // เลเยอร์ทางเดิน = เดินเหยียบได้
+                        } else {
+                            collisionLayer[idx] = 1; // เลเยอร์อื่นๆ = เป็นกำแพงชนหมด!
+                        }
+
                         TilesetData* targetTs = nullptr;
                         for (auto& ts : m_tilesets) {
-                            if (gid >= ts.firstGid) {
+                            if (gid >= (unsigned)ts.firstGid) {
                                 targetTs = &ts;
                                 break;
                             }
@@ -138,19 +151,16 @@ public:
                         q[2].texCoords = {tx + tw, ty + th};
                         q[3].texCoords = {tx, ty + th};
 
-                        // ยัดสี่เหลี่ยมลง VertexArray ให้ถูกแผ่น
                         auto& va = layerVertexArrays[targetTs->firstGid].va;
-                        for(int i=0;  i<4; i++) va.append(q[i]);
+                        for(int i=0;i<4;i++) va.append(q[i]);
                     }
                 }
 
-                // เก็บเฉพาะแผ่นที่ถูกวาดจริงๆ ลงในคอลเล็กชั่นหลัก
                 for (auto& [fgid, ld] : layerVertexArrays) {
                     if (ld.va.getVertexCount() > 0) m_layers.push_back(ld);
                 }
             } 
             else if (layer["type"] == "objectgroup") {
-                std::cout << "Checking Object Layer: " << layer["name"] << std::endl;
                 for (auto& obj : layer["objects"]) {
                     Warp wp; 
                     wp.rect = { (float)obj["x"], (float)obj["y"], (float)obj["width"], (float)obj["height"] };
@@ -162,8 +172,7 @@ public:
                             std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
                             
                             if (lowerName == "nextmap" || lowerName == "naxtmap") {
-                                wp.nextMap = p["value"];
-                                std::cout << "FOUND WARP PROPERTY: " << pName << " = " << wp.nextMap << std::endl;
+                                wp.nextMap = p["value"].get<std::string>(); 
                             }
                         }
                     }
@@ -171,7 +180,6 @@ public:
                 }
             }
         }
-        std::cout << "Total Warps Loaded: " << warps.size() << " from file: " << jsonFile << std::endl;
         return true;
     }
 
@@ -185,7 +193,7 @@ public:
     void draw(sf::RenderTarget& t, sf::RenderStates s) const override {
         s.transform *= getTransform();
         for (auto& l : m_layers) { 
-            s.texture = l.tex; 
+            if (l.tex) s.texture = l.tex.get();
             t.draw(l.va, s); 
         }
     }

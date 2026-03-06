@@ -20,6 +20,8 @@
 class Game {
 private:
     sf::RenderWindow window;
+    sf::View camera; 
+    sf::View uiView; 
     TileMap map;
     sf::Sprite player;
     sf::Texture playerTexture; 
@@ -27,7 +29,7 @@ private:
     float alpha = 0;          
     bool isFading = false;    
     std::string pendingMap = ""; 
-    std::string currentMapName = "map_world.json";
+    std::string currentMapName = "homie.json";
 
     Player rpgPlayer;
     Potion potion;
@@ -57,11 +59,16 @@ private:
 
     sf::Text optA, optB;
     int currentOption = 0; 
+    bool ePressedForWarp = false;
 
 public:
     Game() {
         window.create(sf::VideoMode(1280, 720), "PlsNoFPlsNoF");
         window.setFramerateLimit(60);
+        camera.setSize(1280.f, 720.f);
+        camera.zoom(0.5f); // 🟢 ปรับความซูมตรงนี้ (0.5 คือซูมเข้า 2 เท่า ภาพจะเต็มจอกำลังสวย!)
+        uiView.setSize(1280.f, 720.f);
+        uiView.setCenter(1280.f / 2.f, 720.f / 2.f);
         if (!font.loadFromFile("Minecraft.ttf")) std::cout << "Error: Cannot load font\n";
         
         dialogBox.setSize({1000.f, 200.f});
@@ -102,15 +109,15 @@ public:
         // สร้างมอนสเตอร์บนแมพ (ID 1 = สไลม์)
         npcSys.spawnEnemy("map_world.json", 1, "monster1.png", 800.f, 200.f, 0.5f, 0.5f);
         npcSys.spawnEnemy("map_world.json", 1, "monster1.png", 800.f, 400.f, 0.5f, 0.5f);
-        npcSys.spawnEnemy("map_world.json", 1, "monster1.png", 800.f, 600.f, 0.5f, 0.5f);
+        npcSys.spawnEnemy("underground.json", 1, "monster1.png", 800.f, 600.f, 0.5f, 0.5f);
 
-        if (!map.load("map_world.json")) std::cout << "Map error\n";
+        if (!map.load("homie.json")) std::cout << "Map error\n";
         if (!playerTexture.loadFromFile("player2.png")) std::cout << "Player error\n";
         
         player.setTexture(playerTexture);
         sf::FloatRect bounds = player.getLocalBounds();
         player.setOrigin(bounds.width / 2.f, bounds.height / 2.f);
-        player.setPosition(600.f, 600.f); 
+        player.setPosition(378.f, 241.f); 
         
         fadeRect.setSize({1280, 720}); fadeRect.setFillColor(sf::Color(0, 0, 0, 0)); 
 
@@ -172,71 +179,178 @@ public:
     }
 
     void update() {
-        if (gameState == 0) { 
-            if (isFading) {
-                alpha += 8; 
-                if (alpha >= 255) {
-                    alpha = 255;
-                    if (map.load(pendingMap)) { currentMapName = pendingMap; player.setPosition(300.f, 300.f); isFading = false; }
-                }
-            } else {
-                if (alpha > 0) { alpha -= 8; if (alpha < 0) alpha = 0; }
-                if (alpha < 100) { 
-                    sf::Vector2f move(0, 0);
-                    if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) move.y -= 4;
-                    if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) move.y += 4;
-                    if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) move.x -= 4;
-                    if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) move.x += 4;
+        if (gameState != 0) return; 
 
-                    sf::FloatRect p = player.getGlobalBounds(); 
-                    p.left += 5; p.top += 5; p.width -= 10; p.height -= 10;
+        sf::Vector2f mov(0, 0);
+        float speed = 4.0f;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) mov.y -= speed;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) mov.y += speed;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) mov.x -= speed;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) mov.x += speed;
 
-                    bool canMoveX = true; bool canMoveY = true;
-                    if (map.isSolid(p.left + move.x, p.top) || map.isSolid(p.left + p.width + move.x, p.top + p.height)) canMoveX = false;
-                    if (map.isSolid(p.left, p.top + move.y) || map.isSolid(p.left + p.width, p.top + p.height + move.y)) canMoveY = false;
-
-                    sf::FloatRect px = p; px.left += move.x;
-                    sf::FloatRect py = p; py.top += move.y;
-                    for (auto& itm : itemSys.list) {
-                        if (itm.mapName == currentMapName) {
-                            sf::FloatRect iBounds = itm.imgLoaded ? itm.sprite.getGlobalBounds() : itm.fallbackBox.getGlobalBounds();
-                            if (iBounds.width > 20 && iBounds.height > 20) {
-                                iBounds.left += 5; iBounds.top += 5; iBounds.width -= 10; iBounds.height -= 10;
-                            }
-                            if (px.intersects(iBounds)) canMoveX = false;
-                            if (py.intersects(iBounds)) canMoveY = false;
-                        }
-                    }
-
-                    if (canMoveX) player.move(move.x, 0);
-                    if (canMoveY) player.move(0, move.y);
-
-                    sf::FloatRect hitBox = player.getGlobalBounds();
-                    hitBox.left += 15; hitBox.top += 15; hitBox.width -= 30; hitBox.height -= 30;
-                    for (auto it = npcSys.list.begin(); it != npcSys.list.end(); ) {
-                        if (it->mapNames == currentMapName && it->isEnemy) {
-                            if (it->sprite.getGlobalBounds().intersects(hitBox)) {
-                                int mId = it->monsterId;
-                                it = npcSys.list.erase(it);
-                                startCombat(mId); break;
-                            } else { ++it; }
-                        } else { ++it; }
-                    }
-                }
+        if (mov.x != 0 || mov.y != 0) {
+            sf::Vector2f p = player.getPosition();
+            // ใช้ระบบ isSolid ใหม่ที่เช็คจากเลเยอร์ทางเดิน
+            if (!map.isSolid(p.x + mov.x, p.y + mov.y)) {
+                player.move(mov);
             }
-        } 
-        else if (gameState == 1 || gameState == 3) { 
-            if (charIdx < fullMsg.length() && typeClock.getElapsedTime().asMilliseconds() > 25) {
-                currentMsg += fullMsg[charIdx]; charIdx++; typeClock.restart();
-            }
-            dialogText.setString(currentMsg);
         }
-        if (saveNotifTimer > 0) saveNotifTimer--;
-        fadeRect.setFillColor(sf::Color(0, 0, 0, (sf::Uint8)alpha));
-    }
 
+        // 🟢 อัปเดตตำแหน่งกล้อง (พร้อมระบบล็อกกล้องไม่ให้หลุดขอบแมพ)
+        sf::Vector2f camPos = player.getPosition();
+        
+        // ดึงขนาดกล้องปัจจุบัน (คำนวณระยะซูมให้แล้ว)
+        float viewW = camera.getSize().x; 
+        float viewH = camera.getSize().y; 
+        
+        // คำนวณขนาดแมพทั้งหมดเป็นพิกเซล
+        float mapPxW = map.mapW * map.tileW;
+        float mapPxH = map.mapH * map.tileH;
+
+        // ล็อกกล้องแกน X (ซ้าย-ขวา)
+        if (mapPxW > viewW) {
+            if (camPos.x < viewW / 2.f) camPos.x = viewW / 2.f; // ล็อกขอบซ้าย
+            else if (camPos.x > mapPxW - viewW / 2.f) camPos.x = mapPxW - viewW / 2.f; // ล็อกขอบขวา
+        } else {
+            camPos.x = mapPxW / 2.f; // ถ้าแมพเล็กกว่าจอ ให้จัดกึ่งกลาง
+        }
+
+        // ล็อกกล้องแกน Y (บน-ล่าง)
+        if (mapPxH > viewH) {
+            if (camPos.y < viewH / 2.f) camPos.y = viewH / 2.f; // ล็อกขอบบน
+            else if (camPos.y > mapPxH - viewH / 2.f) camPos.y = mapPxH - viewH / 2.f; // ล็อกขอบล่าง
+        } else {
+            camPos.y = mapPxH / 2.f; // ถ้าแมพเล็กกว่าจอ ให้จัดกึ่งกลาง
+        }
+
+        camera.setCenter(camPos); // เซ็ตตำแหน่งกล้องใหม่
+
+        // --- ระบบวาร์ปแบบกดปุ่ม E ---
+        bool standingOnWarp = false;
+        std::string targetMap = "";
+
+        for (auto& w : map.warps) {
+            if (player.getGlobalBounds().intersects(w.rect)) {
+                standingOnWarp = true;
+                targetMap = w.nextMap;
+                break;
+            }
+        }
+
+        if (standingOnWarp && sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
+            if (!ePressedForWarp && !isFading) {
+                isFading = true;
+                pendingMap = targetMap;
+                alpha = 0;
+                ePressedForWarp = true; // ล็อกปุ่มไว้ป้องกันการวาร์ปซ้ำซ้อน
+            }
+        }
+
+        if (!sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
+            ePressedForWarp = false; 
+        }
+
+    // ระบบ Fade และโหลดแมพ
+    
+// ระบบ Fade และโหลดแมพ
+    // ระบบ Fade และโหลดแมพ
+// ระบบ Fade และโหลดแมพ
+    // ระบบ Fade และโหลดแมพ
+    if (isFading) {
+        alpha += 10;
+        if (alpha >= 255) {
+            alpha = 255;
+            if (map.load(pendingMap)) {
+                
+                std::string previousMap = currentMapName; // 🟢 1. จำชื่อแมพเก่าก่อน
+                currentMapName = pendingMap;              // 🟢 2. อัปเดตแมพใหม่
+
+                // --- แก้พิกัดจุดเกิดใหม่ให้ห่างจากประตู ---
+                if (pendingMap == "village.json") {
+                    if (previousMap == "church.json") {
+                        player.setPosition(551.0f, 278.0f); 
+                    } 
+                    else if (previousMap == "homie.json") {
+                        player.setPosition(154.0f, 382.0f); 
+                    } 
+                    else if (previousMap == "store.json") {
+                        player.setPosition(435.0f, 455.0f); 
+                    }
+                    else if (previousMap == "abandon.json") {
+                        player.setPosition(627.0f, 285.0f); 
+                    }
+                    else {
+                        player.setPosition(150.0f, 358.0f); 
+                    }
+                }
+                else if (pendingMap == "homie.json") {
+                    if (previousMap == "village.json") {
+                        player.setPosition(323.0f, 244.0f); 
+                    } else {
+                        player.setPosition(240.0f, 300.0f);
+                    }
+                }
+                else if (pendingMap == "store.json") {
+                    player.setPosition(277.0f, 373.0f);
+                }
+                else if (pendingMap == "abandon.json") {
+                    if (previousMap == "tunnel.json") {
+                        player.setPosition(342.0f, 358.0f); 
+                    } 
+                    else if (previousMap == "underground.json") {
+                        player.setPosition(342.0f, 376.0f); 
+                    }
+                    // 🟢 เปลี่ยนพิกัดตอนมาจาก village เข้า abandon ตรงนี้!
+                    else if (previousMap == "village.json") {
+                        player.setPosition(10.0f, 399.0f); 
+                    }
+                    else {
+                        player.setPosition(10.0f, 399.0f); // จุดสำรอง
+                    }
+                }
+                else if (pendingMap == "church.json") {
+                    player.setPosition(312.0f, 302.0f);
+                }
+                else if (pendingMap == "lastboss.json") {
+                    player.setPosition(441.0f, 397.0f);
+                }
+                else if (pendingMap == "tunnel.json"){
+                    if (previousMap == "lastboss.json") {
+                        player.setPosition(314.0f, 26.0f);
+                    } else {
+                        player.setPosition(310.0f, 444.0f); 
+                    }
+                }
+                else if (pendingMap == "underground.json") {
+                    if (previousMap == "abandon.json") {
+                        player.setPosition(422.0f, 202.0f); 
+                    } else if (previousMap == "tunnel.json") {
+                        player.setPosition(298.0f, 377.0f); 
+                    } else {
+                        player.setPosition(422.0f, 202.0f); 
+                    }
+                }
+            }
+            isFading = false;
+        }
+    } else if (alpha > 0) {
+        alpha -= 10;
+        if (alpha < 0) alpha = 0;
+    }
+    fadeRect.setFillColor(sf::Color(0, 0, 0, (sf::Uint8)alpha));
+}
     void render() {
-        window.clear(); window.draw(map); itemSys.drawAll(window, currentMapName); npcSys.drawAll(window, currentMapName); window.draw(player); 
+       window.clear(); 
+
+        // 🟢 1. เปิดสวิตช์กล้อง World เพื่อวาดฉากและตัวละคร
+        window.setView(camera);
+        window.draw(map); 
+        itemSys.drawAll(window, currentMapName); 
+        npcSys.drawAll(window, currentMapName); 
+        window.draw(player); 
+
+        // 🟢 2. เปิดสวิตช์กล้อง UI วาดของที่ต้องอยู่กับที่ (เมนู กล่องข้อความ)
+        window.setView(uiView);
         
         if (gameState >= 1 && gameState <= 3) {
             window.draw(dialogBox); window.draw(dialogName); window.draw(dialogText);
@@ -366,7 +480,19 @@ public:
             while (isNaming && window.isOpen()) {
                 sf::Event e;
                 while (window.pollEvent(e)) {
-                    if (e.type == sf::Event::Closed) { window.close(); return; }
+                   if (e.type == sf::Event::MouseButtonPressed) {
+                    if (e.mouseButton.button == sf::Mouse::Left) {
+                        sf::Vector2i pixelPos = sf::Mouse::getPosition(window);
+                        sf::Vector2f worldPos = window.mapPixelToCoords(pixelPos);
+                        
+                        // บังคับพ่นออกจอดำ (Console) ทันที
+                        std::cout << "\n[CLICK DETECTED]" << std::endl;
+                        std::cout << "Coordinate -> X: " << worldPos.x << " , Y: " << worldPos.y << std::endl;
+                        std::cout << "------------------------" << std::flush; 
+                    }
+                }
+
+                if (e.type == sf::Event::Closed) window.close();
                     if (e.type == sf::Event::TextEntered) {
                         if (e.text.unicode == 8) { if (!playerName.empty()) playerName.pop_back(); }
                         else if (e.text.unicode == 13 && !playerName.empty()) isNaming = false;
