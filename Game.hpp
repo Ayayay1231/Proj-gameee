@@ -96,20 +96,20 @@ public:
 
         // สร้าง NPC (ID 1 คือคนแจกเควส)
         vector<string> gmMsg = {"Hello Hero..."}; 
-        npcSys.spawnNPC(1, "map_world.json", "Guild Master", gmMsg, "eps1.png" , 300.f, 200.f, 0.5f, 0.5f);
+        npcSys.spawnNPC(1, "church.json", "Guild Master", gmMsg, "1GM.png" , 303.f, 240.f, 0.1f, 0.1f);
 
         // สร้างชาวบ้านธรรมดา (ID 0)
         vector<string> elderMsg = {"Hello there !", "You got F."};
-        npcSys.spawnNPC(0, "map_world.json","Mystery creature", elderMsg, "npc1.png", 500.f, 400.f, 0.5f, 0.5f);
+        npcSys.spawnNPC(0, "village.json","Mystery creature", elderMsg, "0Jane.png", 420.f, 185.f, 0.1f, 0.1f);
 
         // สร้างพ่อค้า (ID 2)
         vector<string> shopMsg = {""}; 
-        npcSys.spawnNPC(2, "map_world.json", "Merchant", shopMsg, "Merchant.png", 500.f, 300.f, 0.5f, 0.5f);
+        npcSys.spawnNPC(2, "store.json", "Merchant", shopMsg, "2Sell.png", 270.f, 285.f, 0.1f, 0.1f);
         
         // สร้างมอนสเตอร์บนแมพ (ID 1 = สไลม์)
-        npcSys.spawnEnemy("map_world.json", 1, "monster1.png", 800.f, 200.f, 0.5f, 0.5f);
-        npcSys.spawnEnemy("map_world.json", 1, "monster1.png", 800.f, 400.f, 0.5f, 0.5f);
-        npcSys.spawnEnemy("underground.json", 1, "monster1.png", 800.f, 600.f, 0.5f, 0.5f);
+        npcSys.spawnEnemy("underground.json", 1, "monster1.png", 200.f, 200.f, 0.2f, 0.2f);
+        npcSys.spawnEnemy("underground.json", 1, "monster1.png", 250.f, 200.f, 0.2f, 0.2f);
+        npcSys.spawnEnemy("underground.json", 1, "monster1.png",  230.f, 250.f, 0.2f, 0.2f);
 
         if (!map.load("homie.json")) std::cout << "Map error\n";
         if (!playerTexture.loadFromFile("player2.png")) std::cout << "Player error\n";
@@ -134,7 +134,7 @@ public:
             file << playerName << "\n" << currentMapName << "\n" << player.getPosition().x << " " << player.getPosition().y << "\n" << rpgPlayer.hp << " " << rpgPlayer.maxHp << "\n" << rpgPlayer.level << " " << rpgPlayer.exp << "\n" << rpgPlayer.wallet.balance << " " << rpgPlayer.invHP << "\n";
             file.close(); 
             saveNotif.setString("Game Saved!");
-            saveNotifTimer = 120;
+            saveNotifTimer = 5;
         }
     }
 
@@ -179,8 +179,21 @@ public:
     }
 
     void update() {
-        if (gameState != 0) return; 
+        // ถ้าเปิดเมนูหรือคุยอยู่ ให้จัดการแค่ข้อความแล้วหยุดทำงานส่วนอื่น
+        if (gameState != 0) { 
+            if (gameState == 1 || gameState == 3) { 
+                if (charIdx < fullMsg.length() && typeClock.getElapsedTime().asMilliseconds() > 25) {
+                    currentMsg += fullMsg[charIdx]; charIdx++; typeClock.restart();
+                }
+                dialogText.setString(currentMsg);
+            }
+            if (saveNotifTimer > 0) saveNotifTimer--;
+            return; 
+        }
 
+        // ==========================================
+        // 1. ระบบเคลื่อนที่ของ Player
+        // ==========================================
         sf::Vector2f mov(0, 0);
         float speed = 4.0f;
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) mov.y -= speed;
@@ -190,42 +203,53 @@ public:
 
         if (mov.x != 0 || mov.y != 0) {
             sf::Vector2f p = player.getPosition();
-            // ใช้ระบบ isSolid ใหม่ที่เช็คจากเลเยอร์ทางเดิน
+            // เช็คว่าเดินชนกำแพงไหม
             if (!map.isSolid(p.x + mov.x, p.y + mov.y)) {
                 player.move(mov);
             }
         }
 
-        // 🟢 อัปเดตตำแหน่งกล้อง (พร้อมระบบล็อกกล้องไม่ให้หลุดขอบแมพ)
-        sf::Vector2f camPos = player.getPosition();
+        // ==========================================
+        // 2. ระบบเช็คการชนมอนสเตอร์ (เริ่มต่อสู้)
+        // ==========================================
+        sf::FloatRect hitBox = player.getGlobalBounds();
+        hitBox.left += 15; hitBox.top += 15; hitBox.width -= 30; hitBox.height -= 30;
         
-        // ดึงขนาดกล้องปัจจุบัน (คำนวณระยะซูมให้แล้ว)
+        for (auto it = npcSys.list.begin(); it != npcSys.list.end(); ) {
+            if (it->mapNames == currentMapName && it->isEnemy) {
+                if (it->sprite.getGlobalBounds().intersects(hitBox)) {
+                    int mId = it->monsterId;
+                    it = npcSys.list.erase(it); // ลบตัวที่ชนออกจากแมพ
+                    startCombat(mId);           // 🟢 ตัดเข้าฉากสู้!
+                    return;                     // หยุดการอัปเดตอย่างอื่นทันที
+                } else { ++it; }
+            } else { ++it; }
+        }
+
+        // ==========================================
+        // 3. ระบบติดตามมุมกล้อง (Camera)
+        // ==========================================
+        sf::Vector2f camPos = player.getPosition();
         float viewW = camera.getSize().x; 
         float viewH = camera.getSize().y; 
-        
-        // คำนวณขนาดแมพทั้งหมดเป็นพิกเซล
         float mapPxW = map.mapW * map.tileW;
         float mapPxH = map.mapH * map.tileH;
 
-        // ล็อกกล้องแกน X (ซ้าย-ขวา)
         if (mapPxW > viewW) {
-            if (camPos.x < viewW / 2.f) camPos.x = viewW / 2.f; // ล็อกขอบซ้าย
-            else if (camPos.x > mapPxW - viewW / 2.f) camPos.x = mapPxW - viewW / 2.f; // ล็อกขอบขวา
-        } else {
-            camPos.x = mapPxW / 2.f; // ถ้าแมพเล็กกว่าจอ ให้จัดกึ่งกลาง
-        }
+            if (camPos.x < viewW / 2.f) camPos.x = viewW / 2.f; 
+            else if (camPos.x > mapPxW - viewW / 2.f) camPos.x = mapPxW - viewW / 2.f; 
+        } else { camPos.x = mapPxW / 2.f; }
 
-        // ล็อกกล้องแกน Y (บน-ล่าง)
         if (mapPxH > viewH) {
-            if (camPos.y < viewH / 2.f) camPos.y = viewH / 2.f; // ล็อกขอบบน
-            else if (camPos.y > mapPxH - viewH / 2.f) camPos.y = mapPxH - viewH / 2.f; // ล็อกขอบล่าง
-        } else {
-            camPos.y = mapPxH / 2.f; // ถ้าแมพเล็กกว่าจอ ให้จัดกึ่งกลาง
-        }
+            if (camPos.y < viewH / 2.f) camPos.y = viewH / 2.f; 
+            else if (camPos.y > mapPxH - viewH / 2.f) camPos.y = mapPxH - viewH / 2.f; 
+        } else { camPos.y = mapPxH / 2.f; }
 
-        camera.setCenter(camPos); // เซ็ตตำแหน่งกล้องใหม่
+        camera.setCenter(camPos); 
 
-        // --- ระบบวาร์ปแบบกดปุ่ม E ---
+        // ==========================================
+        // 4. ระบบวาร์ปเปลี่ยนแมพ (กด E)
+        // ==========================================
         bool standingOnWarp = false;
         std::string targetMap = "";
 
@@ -242,103 +266,70 @@ public:
                 isFading = true;
                 pendingMap = targetMap;
                 alpha = 0;
-                ePressedForWarp = true; // ล็อกปุ่มไว้ป้องกันการวาร์ปซ้ำซ้อน
+                ePressedForWarp = true; 
             }
         }
-
         if (!sf::Keyboard::isKeyPressed(sf::Keyboard::E)) {
             ePressedForWarp = false; 
         }
 
-    // ระบบ Fade และโหลดแมพ
-    
-// ระบบ Fade และโหลดแมพ
-    // ระบบ Fade และโหลดแมพ
-// ระบบ Fade และโหลดแมพ
-    // ระบบ Fade และโหลดแมพ
-    if (isFading) {
-        alpha += 10;
-        if (alpha >= 255) {
-            alpha = 255;
-            if (map.load(pendingMap)) {
-                
-                std::string previousMap = currentMapName; // 🟢 1. จำชื่อแมพเก่าก่อน
-                currentMapName = pendingMap;              // 🟢 2. อัปเดตแมพใหม่
+        // ==========================================
+        // 5. ระบบ Fade และโหลดย้ายตำแหน่ง
+        // ==========================================
+        if (isFading) {
+            alpha += 10;
+            if (alpha >= 255) {
+                alpha = 255;
+                if (map.load(pendingMap)) {
+                    std::string previousMap = currentMapName; 
+                    currentMapName = pendingMap;              
 
-                // --- แก้พิกัดจุดเกิดใหม่ให้ห่างจากประตู ---
-                if (pendingMap == "village.json") {
-                    if (previousMap == "church.json") {
-                        player.setPosition(551.0f, 278.0f); 
-                    } 
-                    else if (previousMap == "homie.json") {
-                        player.setPosition(154.0f, 382.0f); 
-                    } 
-                    else if (previousMap == "store.json") {
-                        player.setPosition(435.0f, 455.0f); 
+                    if (pendingMap == "village.json") {
+                        if (previousMap == "church.json") player.setPosition(551.0f, 278.0f); 
+                        else if (previousMap == "homie.json") player.setPosition(154.0f, 382.0f); 
+                        else if (previousMap == "store.json") player.setPosition(435.0f, 455.0f); 
+                        else if (previousMap == "abandon.json") player.setPosition(627.0f, 285.0f); 
+                        else player.setPosition(150.0f, 358.0f); 
                     }
-                    else if (previousMap == "abandon.json") {
-                        player.setPosition(627.0f, 285.0f); 
+                    else if (pendingMap == "homie.json") {
+                        if (previousMap == "village.json") player.setPosition(323.0f, 244.0f); 
+                        else player.setPosition(240.0f, 300.0f);
                     }
-                    else {
-                        player.setPosition(150.0f, 358.0f); 
+                    else if (pendingMap == "store.json") {
+                        player.setPosition(277.0f, 373.0f);
                     }
-                }
-                else if (pendingMap == "homie.json") {
-                    if (previousMap == "village.json") {
-                        player.setPosition(323.0f, 244.0f); 
-                    } else {
-                        player.setPosition(240.0f, 300.0f);
+                    else if (pendingMap == "abandon.json") {
+                        if (previousMap == "tunnel.json") player.setPosition(342.0f, 358.0f); 
+                        else if (previousMap == "underground.json") player.setPosition(342.0f, 376.0f); 
+                        else if (previousMap == "village.json") player.setPosition(10.0f, 399.0f); 
+                        else player.setPosition(10.0f, 399.0f);
                     }
-                }
-                else if (pendingMap == "store.json") {
-                    player.setPosition(277.0f, 373.0f);
-                }
-                else if (pendingMap == "abandon.json") {
-                    if (previousMap == "tunnel.json") {
-                        player.setPosition(342.0f, 358.0f); 
-                    } 
-                    else if (previousMap == "underground.json") {
-                        player.setPosition(342.0f, 376.0f); 
+                    else if (pendingMap == "church.json") {
+                        player.setPosition(312.0f, 302.0f);
                     }
-                    // 🟢 เปลี่ยนพิกัดตอนมาจาก village เข้า abandon ตรงนี้!
-                    else if (previousMap == "village.json") {
-                        player.setPosition(10.0f, 399.0f); 
+                    else if (pendingMap == "lastboss.json") {
+                        player.setPosition(441.0f, 397.0f);
                     }
-                    else {
-                        player.setPosition(10.0f, 399.0f); // จุดสำรอง
+                    else if (pendingMap == "tunnel.json"){
+                        if (previousMap == "lastboss.json") player.setPosition(314.0f, 26.0f);
+                        else player.setPosition(310.0f, 444.0f); 
+                    }
+                    else if (pendingMap == "underground.json") {
+                        if (previousMap == "abandon.json") player.setPosition(422.0f, 202.0f); 
+                        else if (previousMap == "tunnel.json") player.setPosition(298.0f, 377.0f); 
+                        else player.setPosition(422.0f, 202.0f); 
                     }
                 }
-                else if (pendingMap == "church.json") {
-                    player.setPosition(312.0f, 302.0f);
-                }
-                else if (pendingMap == "lastboss.json") {
-                    player.setPosition(441.0f, 397.0f);
-                }
-                else if (pendingMap == "tunnel.json"){
-                    if (previousMap == "lastboss.json") {
-                        player.setPosition(314.0f, 26.0f);
-                    } else {
-                        player.setPosition(310.0f, 444.0f); 
-                    }
-                }
-                else if (pendingMap == "underground.json") {
-                    if (previousMap == "abandon.json") {
-                        player.setPosition(422.0f, 202.0f); 
-                    } else if (previousMap == "tunnel.json") {
-                        player.setPosition(298.0f, 377.0f); 
-                    } else {
-                        player.setPosition(422.0f, 202.0f); 
-                    }
-                }
+                isFading = false;
             }
-            isFading = false;
+        } else if (alpha > 0) {
+            alpha -= 10;
+            if (alpha < 0) alpha = 0;
         }
-    } else if (alpha > 0) {
-        alpha -= 10;
-        if (alpha < 0) alpha = 0;
+
+        if (saveNotifTimer > 0) saveNotifTimer--;
+        fadeRect.setFillColor(sf::Color(0, 0, 0, (sf::Uint8)alpha));
     }
-    fadeRect.setFillColor(sf::Color(0, 0, 0, (sf::Uint8)alpha));
-}
     void render() {
        window.clear(); 
 
