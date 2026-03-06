@@ -99,7 +99,7 @@ public:
                     for (int x = 0; x < mapW; x++) {
                         unsigned raw_gid = d[x + y * mapW];
                         
-                        // 🔥 พระเอกอยู่ตรงนี้: สาง Bitmask กลับหน้า/หลัง/บน/ล่าง ทิ้งให้หมด!
+                        //  พระเอกอยู่ตรงนี้: สาง Bitmask กลับหน้า/หลัง/บน/ล่าง ทิ้งให้หมด!
                         unsigned gid = raw_gid & ~(FLIPPED_HORIZONTALLY_FLAG | FLIPPED_VERTICALLY_FLAG | FLIPPED_DIAGONALLY_FLAG);
 
                         if (gid == 0) continue; // ข้ามช่องว่าง
@@ -140,7 +140,7 @@ public:
 
                         // ยัดสี่เหลี่ยมลง VertexArray ให้ถูกแผ่น
                         auto& va = layerVertexArrays[targetTs->firstGid].va;
-                        for(int i=0; i; i<4; i++) va.append(q[i]);
+                        for(int i=0;  i<4; i++) va.append(q[i]);
                     }
                 }
 
