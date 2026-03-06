@@ -310,6 +310,23 @@
                  "width":30,
                  "x":0.666666666666667,
                  "y":370.666666666667
+                }, 
+                {
+                 "height":37.3333333333333,
+                 "id":2,
+                 "name":"",
+                 "properties":[
+                        {
+                         "name":"nextmap",
+                         "type":"string",
+                         "value":"underground.json"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":53.3333333333333,
+                 "x":323.333333333333,
+                 "y":335.333333333333
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -318,7 +335,7 @@
          "y":0
         }],
  "nextlayerid":11,
- "nextobjectid":2,
+ "nextobjectid":3,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.11.2",

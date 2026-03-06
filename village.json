@@ -262,6 +262,23 @@
                  "width":30,
                  "x":432,
                  "y":436
+                }, 
+                {
+                 "height":24,
+                 "id":6,
+                 "name":"",
+                 "properties":[
+                        {
+                         "name":"nextmap",
+                         "type":"string",
+                         "value":"abandon.json"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":34,
+                 "x":603,
+                 "y":273
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -270,7 +287,7 @@
          "y":0
         }],
  "nextlayerid":7,
- "nextobjectid":6,
+ "nextobjectid":10,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.11.2",
