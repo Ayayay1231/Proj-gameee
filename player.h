@@ -37,18 +37,32 @@ public:
 
     int slimesKilled = 0; 
 
-    // --- เพิ่มตัวแปรสำหรับร้านค้า (ธนูไฟ) ---
+    // ตัวแปรสำหรับร้านค้า (ธนูไฟ)
     bool hasFireArrow = false;
     int fireArrowAmmo = 0;
 
     int level, exp;
     int baseMaxDmg = 15; 
-    Weapon* weapon = nullptr; 
+    
+    // 🟢 เพิ่มตัวแปรเก็บอาวุธทั้ง 3 ชิ้น ไว้กับตัวผู้เล่นตลอดเวลา
+    Weapon* ownedSword = nullptr;
+    Weapon* ownedBat = nullptr;
+    Weapon* ownedBow = nullptr;
+    Weapon* weapon = nullptr; // อาวุธที่กำลังถืออยู่
+
     Wallet wallet;
 
     Player() {
         level = 1; exp = 0; maxHp = 100; hp = maxHp;
         maxMp = 50; mp = maxMp;
+        
+        // 🟢 สร้างอาวุธเก็บไว้ในคลังแสง 3 ชิ้นตั้งแต่เริ่มเกม
+        ownedSword = WeaponFactory::selectWeapon(1);
+        ownedBat = WeaponFactory::selectWeapon(2);
+        ownedBow = WeaponFactory::selectWeapon(3);
+        
+        // 🟢 เริ่มเกมมาให้ถือดาบเป็นค่าเริ่มต้น
+        weapon = ownedSword; 
     }
 
     int getNextLevelExp() { return level * 50; }

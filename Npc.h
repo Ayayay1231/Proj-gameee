@@ -19,6 +19,8 @@ public:
     bool hasChoice = false;
     string choiceA, choiceB; 
     string replyA, replyB;   
+    int currentFrame = 0;
+    sf::Clock animClock;
 
     bool isEnemy = false;
     int monsterId = 0;

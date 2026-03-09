@@ -18,7 +18,7 @@ FirstPage::FirstPage(float width, float height) {
         hasBackground = true;
     }
 
-    setupText(title, "REAINAHEE", width/2.0f, 100.0f);
+    setupText(title, "KORACH", width/2.0f, 100.0f);
     title.setCharacterSize(80); 
     title.setOutlineThickness(5.f);
     title.setFillColor(sf::Color::Yellow);

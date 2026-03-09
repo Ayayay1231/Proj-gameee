@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <SFML/Graphics.hpp>
+#include <SFML/Audio.hpp>
 #include "Player.h"
 #include "Monster.h"
 #include "Potion.h"
@@ -21,15 +22,10 @@ public:
         int combatState = 0;
 
         sf::Font font;
-        if(!font.loadFromFile("Minecraft.ttf")){
-            cout << "Cannot load font ";
-        }
+        if(!font.loadFromFile("Minecraft.ttf")) cout << "Cannot load font ";
 
-        sf::Text tui("", font, 24);
-        tui.setFillColor(sf::Color::White);
-
-        sf::Text tlog("", font, 24);
-        tlog.setFillColor(sf::Color::Yellow);
+        sf::Text tui("", font, 24); tui.setFillColor(sf::Color::White);
+        sf::Text tlog("", font, 24); tlog.setFillColor(sf::Color::Yellow);
 
         sf::RectangleShape menuboxes(sf::Vector2f(1200.f,250.f));
         menuboxes.setFillColor(sf::Color(20,20,20,200));
@@ -37,9 +33,6 @@ public:
         menuboxes.setOutlineColor(sf::Color::White);
         menuboxes.setPosition(40.f,450.f);
 
-        // ==========================================
-        // 1. ดึงสกิลที่สวมใส่อยู่มาสร้างเป็นปุ่ม GUI
-        // ==========================================
         Skill currentSkill = p.learnedSkills[p.equippedSkillIndex];
         string skillBtnText = "[ " + currentSkill.name + " (" + to_string(currentSkill.mpCost) + "MP) ]";
 
@@ -49,114 +42,147 @@ public:
         sf::Text btnBuy("[ Buy Pot ]", font, 24);           btnBuy.setPosition(610.f, 630.f);
         sf::Text btnTalk("[ Talk ]", font, 24);             btnTalk.setPosition(780.f, 630.f);
         
-        // สร้างปุ่ม GUI สำหรับ State 4 (ตอนคุยกับมอนสเตอร์)
         sf::Text opt1("-> Apologize", font, 26);     opt1.setPosition(80.f, 630.f);
         sf::Text opt2("-> Intimidate", font, 26);    opt2.setPosition(300.f, 630.f);
 
-
-        sf::Texture bgTexture;
-        sf::Sprite bgSprite;
-        bool hasBattleBg = false;
+        sf::Texture bgTexture; sf::Sprite bgSprite; bool hasBattleBg = false;
         if (bgTexture.loadFromFile("bgBattle.png")) { 
             bgSprite.setTexture(bgTexture);
             bgSprite.setScale(1280.f / bgTexture.getSize().x, 720.f / bgTexture.getSize().y);
             hasBattleBg = true;
         }
 
+        sf::SoundBuffer hitBuffer;
+        sf::Sound hitSound;
+        if (hitBuffer.loadFromFile("sfx.wav")) { // แนะนำให้ใช้ไฟล์ .wav สำหรับ SFX สั้นๆ
+            hitSound.setBuffer(hitBuffer);
+            hitSound.setVolume(80.f);
+        }
+
         s.turns = 1; 
 
-        string fullText = "A wild " + m.name + " appeared!\n\n[ Click to continue ]";
-        string currentText = "";
-        int charIndex = 0;
-        sf::Clock textClock;
-        int textSpeed = 15; 
+        // 🟢 [ZOMBIE] โชว์สถานะตอนเปิดฉาก
+        string statusInfo = "";
+        if (m.isZombie && m.zombieState == 1) statusInfo = "\n(It looks Infected and is decaying!)";
+        string fullText = "A wild " + m.name + " appeared!" + statusInfo + "\n\n[ Click to continue ]";
+        
+        string currentText = ""; int charIndex = 0; sf::Clock textClock; int textSpeed = 15; 
+
+        if (m.sprite.getTexture() != nullptr) {
+            sf::FloatRect bounds = m.sprite.getLocalBounds();
+            m.sprite.setOrigin(bounds.width / 2.f, bounds.height / 2.f);
+            float desiredHeight = 500.f; float scale = desiredHeight / bounds.height;
+            m.sprite.setScale(scale, scale);
+            m.sprite.setPosition(1280.f / 2.f, 300.f); 
+        }
 
         while (p.isAlive() && window.isOpen()) {
             sf::Event event;
-            
-            // ดึงตำแหน่งเมาส์บนจอ
             sf::Vector2i mousePos = sf::Mouse::getPosition(window);
             sf::Vector2f mousePosF(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y));
 
             while (window.pollEvent(event)) {
-                if (event.type == sf::Event::Closed) {
-                    window.close();
-                }
+                if (event.type == sf::Event::Closed) window.close();
 
                 bool isAdvance = (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Space) ||
                                  (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left);
 
-                // ==========================================
-                // 2. ดักจับการใช้เมาส์กดปุ่ม
-                // ==========================================
                 if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-                    
                     if (combatState == 1) {
-                        bool actionTaken = false;
-                        string nextLog = "";
+                        bool actionTaken = false; string nextLog = "";
 
-                        // โจมตีธรรมดา
+                        // ==========================================
+                        // โจมตีธรรมดา & ระบบ อาวุธ (Stun / Burn)
+                        // ==========================================
                         if (btnAttack.getGlobalBounds().contains(mousePosF)) {
                             int d = p.attack(isCrit, (pot.atkBuffTurn > 0 ? 10 : 0), (pot.critBuffTurn > 0 ? 10 : 0));
+                            hitSound.play();
+                            
+                            // 🟢 [ZOMBIE] Frenzy รับดาเมจแรงขึ้น 50%
+                            if (m.isZombie && m.isFrenzied) d += d / 2;
+
                             m.hp -= d; s.totalDmg += d;
-                            nextLog = "You dealt " + to_string(d) + " dmg " + (isCrit ? "[CRIT!]" : "") + "!\n\n";
+                            nextLog = "You dealt " + to_string(d) + " dmg " + (isCrit ? "[CRIT!]" : "") + "!\n";
+
+                            // 🟢 เช็คอาวุธ: Bow ติด Burn / Bat ติด Stun
+                            if (p.weapon != nullptr) {
+                                if (p.weapon->name.find("Bow") != string::npos) {
+                                    m.burnTurn = 3; nextLog += m.name + " is BURNED!\n";
+                                }
+                                else if (p.weapon->name.find("Bat") != string::npos) {
+                                    // 🟢 [ZOMBIE] Infected กัน Stun!
+                                    if (m.isZombie && m.zombieState == 1) {
+                                        nextLog += m.name + " is IMMUNE to Stun!\n";
+                                    } else {
+                                        m.stunTurn = 1; nextLog += m.name + " is STUNNED!\n";
+                                    }
+                                }
+                            }
                             actionTaken = true; pot.updateBuffs(); 
                         } 
                         // ==========================================
-                        // ระบบใช้งานสกิลที่สวมใส่มา
+                        // สกิล
                         // ==========================================
                         else if (btnSkill.getGlobalBounds().contains(mousePosF)) {
                             if (p.mp >= currentSkill.mpCost) { 
                                 p.mp -= currentSkill.mpCost; 
-                                
                                 if (currentSkill.healAmt > 0) {
-                                    p.hp += currentSkill.healAmt;
-                                    if(p.hp > p.maxHp) p.hp = p.maxHp; 
+                                    p.hp += currentSkill.healAmt; if(p.hp > p.maxHp) p.hp = p.maxHp; 
                                     nextLog = "You used [" + currentSkill.name + "]! Healed " + to_string(currentSkill.healAmt) + " HP!\n\n";
-                                } 
-                                else {
+                                } else {
                                     int baseDmg = p.attack(isCrit, (pot.atkBuffTurn > 0 ? 10 : 0), (pot.critBuffTurn > 0 ? 10 : 0));
                                     int finalDmg = baseDmg * currentSkill.dmgMult; 
                                     
-                                    m.hp -= finalDmg; 
-                                    s.totalDmg += finalDmg;
-                                    nextLog = "You used [" + currentSkill.name + "]! Dealt " + to_string(finalDmg) + " dmg " + (isCrit ? "[CRIT!]" : "") + "!\n\n";
+                                    // 🟢 [ZOMBIE] Frenzy รับดาเมจแรงขึ้น 50%
+                                    if (m.isZombie && m.isFrenzied) finalDmg += finalDmg / 2;
+
+                                    m.hp -= finalDmg; s.totalDmg += finalDmg;
+                                    nextLog = "You used [" + currentSkill.name + "]! Dealt " + to_string(finalDmg) + " dmg " + (isCrit ? "[CRIT!]" : "") + "!\n";
                                 }
                                 actionTaken = true; pot.updateBuffs(); 
                             } else {
-                                nextLog = "!! Not enough MP !!\n(Need " + to_string(currentSkill.mpCost) + " MP)\n\n"; 
-                                actionTaken = true; 
+                                nextLog = "!! Not enough MP !!\n\n"; actionTaken = true; 
                             }
                         }
-                        // ==========================================
+                        // ไอเทม/คุย
                         else if (btnHeal.getGlobalBounds().contains(mousePosF)) {
-                             if (pot.invHP > 0) { // เปลี่ยนจาก p.invHP เป็น pot.invHP
-                                 pot.useHP(p.hp, p.maxHp); 
-                                    // ไม่ต้องพิมพ์ p.invHP--; แล้ว เพราะใน pot.useHP มันหักยาให้เรียบร้อยแล้ว
-                                 s.used++;
-                                  nextLog = "You used an HP Potion!\n"; actionTaken = true;
-                            } else { 
-                                 nextLog = "!! No HP Potion left !!\n\n"; actionTaken = true; 
-                                 }
+                             if (pot.invHP > 0) { pot.useHP(p.hp, p.maxHp); s.used++; nextLog = "You used an HP Potion!\n"; actionTaken = true;
+                            } else { nextLog = "!! No HP Potion left !!\n\n"; actionTaken = true; }
                         }
-
-                        
                         else if (btnBuy.getGlobalBounds().contains(mousePosF)) {
-                            if (p.wallet.spendMoney(25)) { 
-                                p.invHP++; s.spent += 25; nextLog = "Bought HP Potion!\n\n"; 
-                            } else { 
-                                nextLog = "!! Not enough Gold !!\n\n"; 
-                            }
-                            actionTaken = true;
+                            if (p.wallet.spendMoney(25)) { pot.invHP++; s.spent += 25; nextLog = "Bought HP Potion!\n\n"; 
+                            } else { nextLog = "!! Not enough Gold !!\n\n"; } actionTaken = true;
                         }
                         else if (btnTalk.getGlobalBounds().contains(mousePosF)) {
-                            combatState = 4;
-                            fullText = m.name + ": \"Grrrr... Why are you in my territory?!\""; 
-                            currentText = ""; charIndex = 0; textClock.restart();
-                            continue; 
+                            combatState = 4; fullText = m.name + ": \"Grrrr...\""; 
+                            currentText = ""; charIndex = 0; textClock.restart(); continue; 
                         }
 
+                        // ==========================================
+                        // 🟢 [ZOMBIE] คำนวณความเสียหายเมื่อจบเทิร์นผู้เล่น
+                        // ==========================================
                         if (actionTaken) {
+                            if (m.burnTurn > 0) {
+                                int burnDmg = 5;
+                                if (m.isZombie && m.zombieState == 2) burnDmg *= 2; // 💥 Rotten รับ Burn x2
+                                m.hp -= burnDmg;
+                                nextLog += m.name + " took " + to_string(burnDmg) + " BURN dmg!\n";
+                                m.burnTurn--;
+                            }
+                            if (m.isZombie && m.zombieState == 1) {
+                                m.hp -= 3;
+                                nextLog += m.name + " took 3 dmg from INFECTION.\n";
+                                m.zombieTimer--;
+                                if (m.zombieTimer <= 0) {
+                                    m.zombieState = 2; // กลายเป็น Rotten
+                                    nextLog += ">>> " + m.name + " evolved into [ROTTEN]! (Dmg down 50%)\n";
+                                }
+                            }
+                            if (m.isZombie && !m.isFrenzied && m.hp > 0 && m.hp < (m.maxHp * 0.3f)) {
+                                m.isFrenzied = true; // เข้าสู่โหมด Frenzy
+                                nextLog += ">>> " + m.name + " enters [FRENZY]! (Atk x2, Def down)\n";
+                            }
+
                             combatState = 2;
                             fullText = nextLog + "[ Click to continue ]"; 
                             currentText = ""; charIndex = 0; textClock.restart();
@@ -165,27 +191,17 @@ public:
                     else if (combatState == 4 && charIndex >= fullText.length()) { 
                         if (opt1.getGlobalBounds().contains(mousePosF)) {
                             int roll = rand() % 100;
-                            if (roll > 40) {
-                                fullText = m.name + ": \"Oh... alright then. Be careful next time!\"\n(The monster leaves peacefully)\n\n[ Click to end combat ]";
-                                combatState = 5; 
-                            } else {
-                                fullText = m.name + ": \"Lies! I don't trust humans!\"\n\n[ Click to continue ]";
-                                combatState = 6; 
-                            }
+                            if (roll > 40) { fullText = "Monster leaves peacefully.\n\n[ Click to end ]"; combatState = 5; } 
+                            else { fullText = "Lies!\n\n[ Click to continue ]"; combatState = 6; }
                             currentText = ""; charIndex = 0; textClock.restart();
                         } 
                         else if (opt2.getGlobalBounds().contains(mousePosF)) {
-                            fullText = m.name + ": \"YOU DARE THREATEN ME?! RAAWR!\"\n(Monster's attack increased!)\n\n[ Click to continue ]";
-                            m.maxDmg += 5;
-                            combatState = 6; 
+                            fullText = "RAAWR!\n(Monster's attack increased!)\n\n[ Click to continue ]"; m.maxDmg += 5; combatState = 6; 
                             currentText = ""; charIndex = 0; textClock.restart();
                         }
                     }
                 }
 
-                // ==========================================
-                // 3. ระบบ Advance (คลิกเพื่อเล่นข้อความต่อ)
-                // ==========================================
                 if (isAdvance) {
                     if (combatState == 0) {
                         if (charIndex < fullText.length()) { currentText = fullText; charIndex = fullText.length(); } 
@@ -194,27 +210,55 @@ public:
                     else if (combatState == 2) {
                         if (charIndex < fullText.length()) { currentText = fullText; charIndex = fullText.length(); } 
                         else {
-                            if (m.hp <= 0) return p.isAlive(); 
+                            // 🟢 [ZOMBIE] เช็คตอนตาย! ถ้าเป็น Rotten มีโอกาส 40% เสก Mini Zombie
+                            if (m.hp <= 0) {
+                                if (m.isZombie && m.zombieState == 2 && (rand() % 100 < 40)) {
+                                    m.name = "Mini Zombie";
+                                    m.maxHp = 30; m.hp = m.maxHp; m.maxDmg = 8;
+                                    m.isZombie = false; m.burnTurn = 0; m.stunTurn = 0;
+                                    fullText = "The Rotten body bursts open!\nA Mini Zombie crawled out!\n\n[ Click to continue ]";
+                                    combatState = 0; // วนกลับไปเริ่มสู้ใหม่แบบเนียนๆ
+                                    currentText = ""; charIndex = 0; textClock.restart();
+                                    continue;
+                                } else {
+                                    return p.isAlive(); 
+                                }
+                            }
                             
-                            combatState = 3; 
-                            currentText = ""; charIndex = 0; textClock.restart();
+                            combatState = 3; currentText = ""; charIndex = 0; textClock.restart();
 
                             if (m.isBoss && !m.ultiUsed && m.hp <= m.ultiThreshold) {
-                                m.ultiUsed = true; 
-                                p.hp -= m.ultiDmg;
+                                m.ultiUsed = true; p.hp -= m.ultiDmg;
                                 fullText = "WARNING! " + m.name + " is enraged!\nIt uses [" + m.ultiName + "]! You took " + to_string(m.ultiDmg) + " dmg!\n\n[ Click to continue ]";
                             } 
                             else {
-                                int md = (rand() % m.maxDmg) + 1; 
-                                p.hp -= md;
-                                fullText = m.name + " counter-attacks for " + to_string(md) + " dmg!\n\n[ Click to continue ]";
+                                // 🟢 [ZOMBIE] มอนสเตอร์โจมตี (เช็ค Stun / Frenzy ตีเบิ้ล / Rotten ตีเบา)
+                                if (m.stunTurn > 0) {
+                                    fullText = m.name + " is STUNNED and cannot attack!\n\n[ Click to continue ]";
+                                    m.stunTurn--;
+                                } else {
+                                    int attackCount = 1;
+                                    if (m.isZombie && m.isFrenzied) attackCount = 2; // คลั่งตี 2 รอบ!
+                                    
+                                    fullText = "";
+                                    for (int i = 0; i < attackCount; i++) {
+                                        int md = (rand() % m.maxDmg) + 1; 
+                                        
+                                        if (m.isZombie && m.zombieState == 2) md /= 2; // Rotten ดาเมจหาย 50%
+                                        if (m.isZombie && m.isFrenzied) md += md / 2;  // Frenzy ดาเมจเพิ่ม 50%
+                                        
+                                        p.hp -= md;
+                                        fullText += m.name + " counter-attacks for " + to_string(md) + " dmg!\n";
+                                    }
+                                    fullText += "\n[ Click to continue ]";
+                                }
                             }
                         }
                     }
                     else if (combatState == 3) {
                         if (charIndex < fullText.length()) { currentText = fullText; charIndex = fullText.length(); } 
                         else {
-                            if (p.hp <= 0) return p.isAlive(); 
+                            if (p.hp < 0) return p.isAlive(); 
                             s.turns++; combatState = 1; 
                         }
                     }
@@ -228,10 +272,16 @@ public:
                     else if (combatState == 6) {
                         if (charIndex < fullText.length()) { currentText = fullText; charIndex = fullText.length(); } 
                         else {
-                            int md = (rand() % m.maxDmg) + 1; p.hp -= md;
-                            combatState = 3; 
-                            fullText = m.name + " attacks you for " + to_string(md) + " dmg!\n\n[ Click to continue ]";
-                            currentText = ""; charIndex = 0; textClock.restart();
+                            if (m.stunTurn > 0) {
+                                fullText = m.name + " is STUNNED and cannot attack!\n\n[ Click to continue ]"; m.stunTurn--;
+                            } else {
+                                int md = (rand() % m.maxDmg) + 1; 
+                                if (m.isZombie && m.zombieState == 2) md /= 2;
+                                if (m.isZombie && m.isFrenzied) md += md / 2;
+                                p.hp -= md; 
+                                fullText = m.name + " attacks you for " + to_string(md) + " dmg!\n\n[ Click to continue ]";
+                            }
+                            combatState = 3; currentText = ""; charIndex = 0; textClock.restart();
                         }
                     }
                 }
@@ -249,59 +299,46 @@ public:
                 }
             }
 
-            // ==========================================
-            // 4. เอฟเฟกต์เมาส์ชี้ (Hover)
-            // ==========================================
             btnAttack.setFillColor(btnAttack.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
             btnSkill.setFillColor(btnSkill.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White); 
             btnHeal.setFillColor(btnHeal.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
             btnBuy.setFillColor(btnBuy.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
             btnTalk.setFillColor(btnTalk.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
-
             opt1.setFillColor(opt1.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
             opt2.setFillColor(opt2.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
 
-            // ==========================================
-            // วาดภาพลงจอ
-            // ==========================================
             window.clear(); 
-            if (hasBattleBg) {
-                window.draw(bgSprite);
-            }
-            window.draw(m.sprite);
-            window.draw(menuboxes);
+            if (hasBattleBg) window.draw(bgSprite);
+            window.draw(m.sprite); window.draw(menuboxes);
             
             if (combatState == 1) {
+                // 🟢 [ZOMBIE] แสดง Icon สถานะบนหัว!
+                string zStatus = "";
+                if (m.isZombie) {
+                    if (m.zombieState == 1) zStatus += "[INF] ";
+                    if (m.zombieState == 2) zStatus += "[ROT] ";
+                    if (m.isFrenzied) zStatus += "[FRENZY] ";
+                }
+                if (m.burnTurn > 0) zStatus += "[BURN] ";
+                if (m.stunTurn > 0) zStatus += "[STUN] ";
+
                 string uistring = "[ Turn " + to_string(s.turns) + " ]\n";
-                uistring += "Monster: " + m.name + " | HP: " + to_string(m.hp) + "/" + to_string(m.maxHp) + "\n\n";
+                uistring += "Monster: " + m.name + " " + zStatus + "| HP: " + to_string(m.hp) + "/" + to_string(m.maxHp) + "\n\n";
                 
                 uistring += "Player HP: " + to_string(p.hp) + "/" + to_string(p.maxHp) + " | MP: " + to_string(p.mp) + "/" + to_string(p.maxMp) + " | Gold: " + to_string(p.wallet.balance) + " G\n";
-                
-                uistring += "Inventory -> HP Pots: " + to_string(p.invHP) + "\n";
+                uistring += "Inventory -> HP Pots: " + to_string(pot.invHP) + "\n";
                 
                 tui.setString(uistring);
                 tui.setPosition(60.f, 470.f);
                 window.draw(tui);
 
-                window.draw(btnAttack);
-                window.draw(btnSkill); 
-                window.draw(btnHeal);
-                window.draw(btnBuy);
-                window.draw(btnTalk);
+                window.draw(btnAttack); window.draw(btnSkill); window.draw(btnHeal); window.draw(btnBuy); window.draw(btnTalk);
             
             } else if (combatState == 4) {
-                tlog.setString(">> " + currentText);
-                tlog.setPosition(60.f, 470.f); 
-                window.draw(tlog);
-                
-                if (charIndex >= fullText.length()) {
-                    window.draw(opt1);
-                    window.draw(opt2);
-                }
+                tlog.setString(">> " + currentText); tlog.setPosition(60.f, 470.f); window.draw(tlog);
+                if (charIndex >= fullText.length()) { window.draw(opt1); window.draw(opt2); }
             } else {
-                tlog.setString(">> " + currentText);
-                tlog.setPosition(60.f, 470.f); 
-                window.draw(tlog);
+                tlog.setString(">> " + currentText); tlog.setPosition(60.f, 470.f); window.draw(tlog);
             }
             
             window.display();
