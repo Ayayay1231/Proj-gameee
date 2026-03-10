@@ -11,11 +11,13 @@ public:
 
 private:
     sf::Font font;
-    sf::Text title, playBtn, loadBtn, exitBtn;
+    sf::Text title, playBtn, loadBtn, exitBtn, creditBtn;
+    sf::Text creditList;
     void setupText(sf::Text &text, std::string str, float x, float y);
 
     sf::Texture bgTex;
     sf::Sprite bgSprite;
     bool hasBackground = false;
+    bool showCredit = false;
 };
 #endif

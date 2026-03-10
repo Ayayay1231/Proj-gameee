@@ -19,6 +19,7 @@
 #include "Weapon.h"
 #include "FirstPage.h" 
 #include "scene.h"
+#include "tribeEntity.h"
 
 class Game {
 private:
@@ -76,6 +77,12 @@ private:
     int currentOption = 0; 
     bool ePressedForWarp = false;
 
+    std::vector<TribeEntity*> tribes; 
+    sf::Texture tribeTex;
+    sf::Sprite tribeSprite;
+    sf::Clock deltaClock; // เอาไว้จับเวลา deltaTime
+    bool gKeyWasPressed = false;
+
 public:
     Game() {
         window.create(sf::VideoMode(1280, 720), "PlsNoFPlsNoF");
@@ -120,7 +127,7 @@ public:
         // สร้างชาวบ้านธรรมดา (ID 0)
         vector<string> Jane = {"Long time no see " + playerName + " !!", "There is a strange noise coming from the east, Did you hear that?"};
         vector<string> elderMsg = {"Hello there !", "You got F."};
-        npcSys.spawnNPC(0, "village.json","Jane", Jane, "0Jane.png", 420.f, 185.f, 0.1f, 0.1f);
+        npcSys.spawnNPC(0, "village.json","Jane", Jane, "0Jane.png", 420.f, 185.f, 0.08f, 0.08f);
 
         // สร้างพ่อค้า (ID 2)
         vector<string> shopMsg = {""}; 
@@ -131,12 +138,25 @@ public:
         npcSys.spawnEnemy("lastboss.json",99,"bosstrue.png",200.f,150.f,0.3f,0.3f);
         
         // สร้างมอนสเตอร์บนแมพ (ID 1 = สไลม์)
-        npcSys.spawnEnemy("underground.json", 1, "monster1.png", 200.f, 200.f, 0.2f, 0.2f);
-        npcSys.spawnEnemy("underground.json", 1, "monster1.png", 250.f, 200.f, 0.2f, 0.2f);
-        npcSys.spawnEnemy("underground.json", 1, "monster1.png",  230.f, 250.f, 0.2f, 0.2f);
+        npcSys.spawnEnemy("underground.json", 1, "Black_grouse_Flight.png", 200.f, 200.f, 0.5f, 0.5f);
+        npcSys.spawnEnemy("underground.json", 1, "Black_grouse_Flight.png", 250.f, 200.f, 0.5f, 0.5f);
+        npcSys.spawnEnemy("underground.json", 1, "Black_grouse_Flight.png",  230.f, 250.f, 0.5f, 0.5f);
 
         if (!map.load("homie.json")) std::cout << "Map error\n";
         if (!playerTexture.loadFromFile("playerani.png")) std::cout << "Player error\n";
+
+        if (tribeTex.loadFromFile("Black_grouse_Flight.png")) {
+            tribeSprite.setTexture(tribeTex);
+            tribeSprite.setScale(0.1f, 0.1f); 
+            // เซ็ตจุดศูนย์กลางให้อยู่ตรงกลางรูป
+            tribeSprite.setOrigin(tribeTex.getSize().x / 2.f, tribeTex.getSize().y / 2.f);
+        }
+
+        // 🟢 สร้างชนเผ่า 2 ตัว (ตัวแรกเกิดมาคะแนน 50=Neutral, ตัวสอง 10=Hostile)
+       // tribes.push_back(new TribeEntity(50.0f, sf::Vector2f(500.f, 300.f), "Black_grouse_Flight.png"));
+        tribes.push_back( new TribeEntity(10.0f, sf::Vector2f(300.f, 400.f), "Black_grouse_Flight.png"));
+        
+        deltaClock.restart(); // เริ่มจับเวลาตอนเปิดเกม
         
         player.setTexture(playerTexture);
         sf::FloatRect bounds = player.getLocalBounds();
@@ -210,13 +230,13 @@ public:
             targetBGM = "village.ogg";
         }
         // 🟢 ถ้าลงดันเจี้ยน
-        else if (mapName == "abandon.json" || mapName == "tunnel.json") {
+        else if (mapName == "abandon.json" || mapName == "tunnel.json" || mapName == "underground.json" || mapName == "lastboss.json") {
             targetBGM = "Dun.ogg";
         }
         // 🟢 แมพบอส
-        else if (mapName == "underground.json" || mapName == "lastboss.json") {
-            targetBGM = "bgm_boss.ogg";
-        }
+      //  else if (mapName == "underground.json" || mapName == "lastboss.json") {
+        //    targetBGM = "bgm_boss.ogg";
+        //}
 
         // ==========================================
         // 🛑 ระบบกันเพลงเริ่มใหม่: 
@@ -268,7 +288,7 @@ public:
             if (mId == 1) { 
                 rpgPlayer.slimesKilled++;
                 for (auto& q : rpgPlayer.questLog) {
-                    if (q.name == "Slay the Slimes" && !q.isCompleted) {
+                    if (q.name == "Slay the Black grouses" && !q.isCompleted) {
                         q.progress = rpgPlayer.slimesKilled;
                         if (q.progress > q.maxProgress) q.progress = q.maxProgress; 
                         saveNotif.setString("Quest Updated: " + std::to_string(q.progress) + "/" + std::to_string(q.maxProgress));
@@ -375,55 +395,70 @@ public:
             currentFrame = 0; 
         }
 
+
+        // ==========================================
+        // 🟢 ระบบอัปเดตชนเผ่า (Tribe AI)
+        // ==========================================
+        float dt = deltaClock.restart().asSeconds(); // คำนวณเวลาที่ผ่านไป (deltaTime)
+        sf::Vector2f pPos = player.getPosition();
+
+        bool gKeyIsPressed = sf::Keyboard::isKeyPressed(sf::Keyboard::G);
+
+        for (auto& tribe : tribes) {
+            // 1. ให้ AI คำนวณการเดิน (เดินเข้าหา, หนี, หรือพุ่งเข้าใส่)
+            tribe->update(dt, pPos);
+
+            // 2. ระบบให้ของขวัญ (กดปุ่ม G เมื่ออยู่ใกล้ๆ)
+            // เช็คระยะห่างระหว่างเรากับเขา
+            
+        }
+        gKeyWasPressed = gKeyIsPressed; // อัปเดตสถานะปุ่ม
+
         // ==========================================
         // 2. ระบบเช็คการชนมอนสเตอร์
         // ==========================================
         sf::FloatRect hitBox = player.getGlobalBounds();
-        sf::Vector2f pPos = player.getPosition(); // ดึงพิกัดผู้เล่น
         
         for (auto it = npcSys.list.begin(); it != npcSys.list.end(); ) {
             if (it->mapNames == currentMapName && it->isEnemy) {
                 
-                // 🟢 1. ระบบวิ่งไล่ (Chasing System)
-                sf::Vector2f ePos = it->sprite.getPosition();
-                float dx = pPos.x - ePos.x;
-                float dy = pPos.y - ePos.y;
-                float dist = std::sqrt(dx*dx + dy*dy); // คำนวณระยะห่างระหว่างเรากับมอน
-
-                float aggroRange = 250.0f; // ระยะมองเห็น (ปรับให้กว้าง/แคบได้ตามใจชอบ)
-                float enemySpeed = 1.2f;   // ความเร็วมอน (ให้ช้ากว่าเรานิดนึง จะได้หนีพ้น 555)
-
-                if (dist < aggroRange && dist > 15.f) { // ถ้าอยู่ในระยะเห็น และยังไม่สิงร่างกัน
-                    // หาเวกเตอร์ทิศทางให้มันเดินพุ่งมาหาเราตรงๆ
-                    float vx = (dx / dist) * enemySpeed;
-                    float vy = (dy / dist) * enemySpeed;
-
-                    // ขยับมอนสเตอร์ (มีเช็คชนกำแพงด้วย จะได้ไม่เดินทะลุกำแพงมาหาเรา)
-                    if (!map.isSolid(ePos.x + vx, ePos.y)) ePos.x += vx;
-                    if (!map.isSolid(ePos.x, ePos.y + vy)) ePos.y += vy;
-                    it->sprite.setPosition(ePos);
-
-                    // 🟢 2. ระบบแอนิเมชันตอนวิ่ง
-                    // 🚨 ข้อควรระวัง: โค้ดตรงนี้สมมติว่าภาพมอนสเตอร์คุณเป็น Sprite Sheet เหมือนตัวละครหลักนะครับ
-                    // ถ้าภาพมอนสเตอร์เป็นรูปนิ่งๆ เดี่ยวๆ ให้ลบโค้ดบล็อกอนิเมชันนี้ทิ้ง ไม่งั้นมอนสเตอร์จะล่องหน!
+                // 🟢 1. ดักไว้! ถ้า "ไม่ใช่บอส" (ID ไม่ใช่ 99) ถึงจะวิ่งไล่และหั่นภาพ
+                if (it->monsterId != 99) {
                     
-                    int mDir = 0; // 0=ลง, 1=ซ้าย, 2=ขวา, 3=ขึ้น
-                    if (std::abs(dx) > std::abs(dy)) mDir = (dx > 0) ? 2 : 1;
-                    else mDir = (dy > 0) ? 0 : 3;
+                    sf::Vector2f ePos = it->sprite.getPosition();
+                    float dx = pPos.x - ePos.x;
+                    float dy = pPos.y - ePos.y;
+                    float dist = std::sqrt(dx*dx + dy*dy); 
 
-                    if (it->animClock.getElapsedTime().asMilliseconds() > 150) {
-                        it->currentFrame++;
-                        if (it->currentFrame >= 4) it->currentFrame = 0; // สมมติว่ามี 4 เฟรม
-                        
-                        // ตัดรูปมาโชว์ (เปลี่ยนเลข 64 เป็นความกว้าง/ยาวของ 1 เฟรมมอนสเตอร์คุณ)
-                        int mFrameWidth = 64; 
-                        int mFrameHeight = 64;
-                        it->sprite.setTextureRect(sf::IntRect(it->currentFrame * mFrameWidth, mDir * mFrameHeight, mFrameWidth, mFrameHeight));
-                        
-                        it->animClock.restart();
+                    float aggroRange = 250.0f; 
+                    float enemySpeed = 1.2f;   
+
+                    if (dist < aggroRange && dist > 15.f) { 
+                        float vx = (dx / dist) * enemySpeed;
+                        float vy = (dy / dist) * enemySpeed;
+
+                        if (!map.isSolid(ePos.x + vx, ePos.y)) ePos.x += vx;
+                        if (!map.isSolid(ePos.x, ePos.y + vy)) ePos.y += vy;
+                        it->sprite.setPosition(ePos);
+
+                        int mDir = 0; 
+                        if (std::abs(dx) > std::abs(dy)) mDir = (dx > 0) ? 2 : 1;
+                        else mDir = (dy > 0) ? 0 : 3;
+
+                        if (it->animClock.getElapsedTime().asMilliseconds() > 150) {
+                            it->currentFrame++;
+                            if (it->currentFrame >= 4) it->currentFrame = 0; 
+                            
+                            int mFrameWidth = 32; 
+                            int mFrameHeight = 32;
+                            it->sprite.setTextureRect(sf::IntRect(it->currentFrame * mFrameWidth, mDir * mFrameHeight, mFrameWidth, mFrameHeight));
+                            
+                            it->animClock.restart();
+                        }
                     }
-                }
-                // 🟢 3. โค้ดเช็คชนเพื่อเริ่มสู้ (ของเดิม)
+                } // 🟢 จบเงื่อนไขเช็คบอส
+
+                // 🟢 3. โค้ดเช็คชนเพื่อเริ่มสู้ (บอสจะมาทำงานตรงนี้ได้ตามปกติ!)
                 if (it->sprite.getGlobalBounds().intersects(hitBox)) {
                     int mId = it->monsterId;
                     it = npcSys.list.erase(it); // ลบตัวที่ชนออกจากฉาก
@@ -548,7 +583,19 @@ public:
         window.draw(map); 
         itemSys.drawAll(window, currentMapName); 
         npcSys.drawAll(window, currentMapName); 
-        window.draw(player); 
+        for (auto tribe : tribes) {
+          //  tribeSprite.setPosition(tribe.getPosition());
+            window.draw(tribe->getSprite());
+
+            
+            // จัดตำแหน่งให้อยู่บนหัวพอดี
+            
+            
+           // window.draw(stateText);
+        }
+
+        window.draw(player); // วาดผู้เล่นทีหลังสุด จะได้ทับตัวอื่น
+        
 
         window.setView(uiView);
         
@@ -786,7 +833,7 @@ public:
                                     else if (npc.npcId == 1) { 
                                         bool hasQuest = false; bool isDone = false;
                                         for (auto& q : rpgPlayer.questLog) {
-                                            if (q.name == "Slay the Slimes") { hasQuest = true; isDone = q.isCompleted; break; }
+                                            if (q.name == "Slay the Black grouses") { hasQuest = true; isDone = q.isCompleted; break; }
                                         }
 
                                         if (!hasQuest) {
@@ -808,7 +855,7 @@ public:
                                             saveNotifTimer = 180;
 
                                             for (auto& q : rpgPlayer.questLog) {
-                                                if (q.name == "Slay the Slimes") q.isCompleted = true;
+                                                if (q.name == "Slay the Black grouses") q.isCompleted = true;
                                             }
                                         } 
                                         else {
@@ -864,10 +911,10 @@ public:
                     else if (gameState == 3 && e.key.code == sf::Keyboard::Space) { 
                         if (talkingTo && talkingTo->npcId == 1 && currentOption == 0) { 
                             bool hasQuest = false;
-                            for (auto& q : rpgPlayer.questLog) { if (q.name == "Slay the Slimes") hasQuest = true; }
+                            for (auto& q : rpgPlayer.questLog) { if (q.name == "Slay the Black grouses") hasQuest = true; }
                             
                             if (!hasQuest) { 
-                                Quest newQuest = {"Slay the Slimes", "Defeat 3 slimes outside the village.", false, 0, 3};
+                                Quest newQuest = {"Slay the Black grouses", "Defeat 3 black grouses outside the village.", false, 0, 3};
                                 rpgPlayer.questLog.push_back(newQuest);
                                 saveNotif.setString("New Quest Accepted!");
                                 saveNotifTimer = 120;
@@ -952,7 +999,14 @@ public:
             playerDir = 0; 
             
             npcSys.list.clear();
-            vector<string> gmMsg = {"Hello Hero..."}; 
+
+            for (auto t : tribes) delete t;
+            tribes.clear();
+            tribes.push_back(new TribeEntity(50.0f, sf::Vector2f(500.f, 300.f), "0Jane.png"));
+            tribes.push_back(new TribeEntity(10.0f, sf::Vector2f(300.f, 400.f), "0Jane.png"));
+
+            vector<string> gmMsg = {"Hello Hero..."};
+          //  vector<string> gmMsg = {"Hello Hero..."}; 
             npcSys.spawnNPC(1, "church.json", "Guild Master", gmMsg, "1GM.png" , 303.f, 200.f, 0.08f, 0.08f);
             //vector<string> elderMsg = {"Hello there !", "You got F."};
             vector<string> Jane = {"Long time no see " + playerName + " !!", "There’s a strange noise coming from the east, Did you hear that?"};
@@ -960,9 +1014,9 @@ public:
             vector<string> shopMsg = {""}; 
             npcSys.spawnNPC(2, "store.json", "Merchant", shopMsg, "2Sell.png", 270.f, 265.f, 0.08f, 0.08f);
             npcSys.spawnEnemy("lastboss.json",99,"bosstrue.png",200.f,150.f,0.3f,0.3f);
-            npcSys.spawnEnemy("underground.json", 4, "monster1.png", 200.f, 200.f, 0.2f, 0.2f);
-            npcSys.spawnEnemy("underground.json", 4, "monster1.png", 250.f, 200.f, 0.2f, 0.2f);
-            npcSys.spawnEnemy("underground.json", 4, "monster1.png",  230.f, 250.f, 0.2f, 0.2f);
+            npcSys.spawnEnemy("underground.json", 4, "Black_grouse.png", 200.f, 200.f, 0.2f, 0.2f);
+            npcSys.spawnEnemy("underground.json", 4, "Black_grouse.png", 250.f, 200.f, 0.2f, 0.2f);
+            npcSys.spawnEnemy("underground.json", 4, "Black_grouse.png",  230.f, 250.f, 0.2f, 0.2f);
 
             goto START_MENU;
         }

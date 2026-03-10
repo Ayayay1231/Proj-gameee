@@ -32,7 +32,7 @@ public:
     Monster(int monsterId) {
        
         if (monsterId == 1) {
-            name = "Slime"; maxHp = 30; maxDmg = 5; imgpath = "monster1.png";
+            name = "Black grouse"; maxHp = 30; maxDmg = 5; imgpath = "Black_grouse.png";
         } 
         else if (monsterId == 2) {
             name = "Goblin"; maxHp = 60; maxDmg = 12; imgpath = "monster2.png";
@@ -44,10 +44,10 @@ public:
         // 🟢 เพิ่มซอมบี้ (ID 4) พร้อมตั้งค่าสถานะเริ่มต้น
         // ==========================================
         else if (monsterId == 4) {
-            name = "Zombie";
+            name = "Zombie Black grouse";
             maxHp = 200;
             maxDmg = 15;
-            imgpath = "monster1.png"; // เปลี่ยนรูปซอมบี้ตรงนี้ได้เลยครับ
+            imgpath = "Black_grouse.png"; // เปลี่ยนรูปซอมบี้ตรงนี้ได้เลยครับ
             isZombie = true;
             zombieState = 1; // เริ่มมาติด Infected ทันที
             zombieTimer = 3; // นับเวลาเน่า 3 เทิร์น

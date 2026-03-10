@@ -33,9 +33,20 @@ FirstPage::FirstPage(float width, float height) {
     setupText(loadBtn, "LOAD GAME", width/2.0f, 400.0f); // <--- เปลี่ยนเป็น LOAD GAME
     loadBtn.setOutlineThickness(5.f);
     loadBtn.setOutlineColor(sf::Color::Black);
-    setupText(exitBtn, "EXIT", width/2.0f, 500.0f);
+    setupText(exitBtn, "EXIT", width/2.0f, 600.0f);
     exitBtn.setOutlineThickness(5.f);
     exitBtn.setOutlineColor(sf::Color::Black);
+    setupText(creditBtn, "CREDIT", width/2.0f, 500.0f);
+    creditBtn.setOutlineThickness(5.f);
+    creditBtn.setOutlineColor(sf::Color::Black);
+
+    
+    setupText(creditList, "Member 1: 680610762\nMember 2: 680610782\nMember 3: 680610793\nMember 4: 680610842\n\n", width/2.0f + 85.0f, height/2.0f + 50.0f );
+    
+    creditList.setCharacterSize(30);
+    creditList.setOutlineThickness(5.f);
+    creditList.setOutlineColor(sf::Color::Black);
+
 }
 
 void FirstPage::setupText(sf::Text &text, std::string str, float x, float y) {
@@ -59,22 +70,37 @@ int FirstPage::run(sf::RenderWindow &window) {
             if (event.type == sf::Event::Closed) return 0; 
 
             if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
-                if (playBtn.getGlobalBounds().contains(mousePosF)) return 1; 
-                if (loadBtn.getGlobalBounds().contains(mousePosF)) return 2; // <--- ส่งค่า 2 คือโหลดเกม
-                if (exitBtn.getGlobalBounds().contains(mousePosF)) return 0; 
+                if (showCredit) {
+                    showCredit = false; // ถ้าหน้า Credit เปิดอยู่ คลิกตรงไหนก็ได้เพื่อปิด
+                } else {
+                    if (playBtn.getGlobalBounds().contains(mousePosF)) return 1; 
+                    if (loadBtn.getGlobalBounds().contains(mousePosF)) return 2;
+                    if (creditBtn.getGlobalBounds().contains(mousePosF)) showCredit = true; // เปิดหน้า Credit
+                    if (exitBtn.getGlobalBounds().contains(mousePosF)) return 0; 
+                }
             }
         }
 
-        playBtn.setFillColor(playBtn.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
-        loadBtn.setFillColor(loadBtn.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
-        exitBtn.setFillColor(exitBtn.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
-
         window.clear();
         if (hasBackground) window.draw(bgSprite);
-        window.draw(title);
-        window.draw(playBtn);
-        window.draw(loadBtn);
-        window.draw(exitBtn);
+
+        if (showCredit) {
+            // วาดหน้า Credit
+            window.draw(title);
+            window.draw(creditList); // วาดรายชื่อสมาชิก
+        } else {
+            // วาดหน้าเมนูหลักปกติ และจัดการ Effect ปุ่ม Hover
+            playBtn.setFillColor(playBtn.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
+            loadBtn.setFillColor(loadBtn.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
+            creditBtn.setFillColor(creditBtn.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
+            exitBtn.setFillColor(exitBtn.getGlobalBounds().contains(mousePosF) ? sf::Color::Red : sf::Color::White);
+
+            window.draw(title);
+            window.draw(playBtn);
+            window.draw(loadBtn);
+            window.draw(creditBtn);
+            window.draw(exitBtn);
+        }
         window.display();
     }
     return 0;
