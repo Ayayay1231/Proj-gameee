@@ -8,15 +8,16 @@
 
 #include "relationship.h" 
 #include "animationHandler.h" 
+#include "emotions.h" // --- 1. นำเข้าระบบอารมณ์ ---
 
 using namespace std;
 
 //for tribe animation
 enum TribeAnimID {
-    FLY_UP = 0,    
-    FLY_DOWN = 1,  
-    FLY_LEFT = 2,  
-    FLY_RIGHT = 3  
+    UP = 0,    
+    DOWN = 1,  
+    LEFT = 2,  
+    RIGHT = 3  
 };
 
 class TribeEntity {
@@ -24,6 +25,7 @@ private:
    
     Relationship relation; 
     sf::Vector2f position;
+    Emotion currentEmotion; // --- 2. เพิ่มสถานะอารมณ์ของ NPC ---
     
     // callouts
     float timeSinceLastInteraction; 
@@ -83,14 +85,14 @@ private:
             position += direction * 60.0f * deltaTime;
             
             if (abs(direction.x) > abs(direction.y)) {
-                if (direction.x > 0) animator->play(FLY_RIGHT);
-                else animator->play(FLY_LEFT);
+                if (direction.x > 0) animator->play(RIGHT);
+                else animator->play(LEFT);
             } else {
-                if (direction.y > 0) animator->play(FLY_DOWN);
-                else animator->play(FLY_UP);
+                if (direction.y > 0) animator->play(DOWN);
+                else animator->play(UP);
             }
         } else {
-            animator->play(FLY_UP);
+            animator->play(UP);
         }
     }
 
@@ -107,15 +109,15 @@ private:
                 relation.modify(-15.0f); 
                 timeNearNeutral = 0.0f; 
             }
-            animator->play(FLY_UP);
+            animator->play(UP);
         } else {
             timeNearNeutral = 0.0f;
             performRandomWalk(deltaTime, 40.0f); 
         }
     }
 
-    // hostiles
-    void performHostileBehavior(float deltaTime, sf::Vector2f playerPos) {
+    // hostiles (เพิ่มการรับค่าอารมณ์ผู้เล่นเข้ามาคำนวณ)
+    void performHostileBehavior(float deltaTime, sf::Vector2f playerPos, Emotion playerEmotion) {
         if (!hasPrintedHostile) {
             cout << "(Hostile) The tribe is aggressive and attacking you!\n";
             hasPrintedHostile = true;
@@ -130,20 +132,28 @@ private:
             position += direction * 120.0f * deltaTime; 
 
             if (abs(direction.x) > abs(direction.y)) {
-                if (direction.x > 0) animator->play(FLY_RIGHT);
-                else animator->play(FLY_LEFT);
+                if (direction.x > 0) animator->play(RIGHT);
+                else animator->play(LEFT);
             } else {
-                if (direction.y > 0) animator->play(FLY_DOWN);
-                else animator->play(FLY_UP);
+                if (direction.y > 0) animator->play(DOWN);
+                else animator->play(UP);
             }
 
             // attacks a player
             if (dist < 20.0f && rand() % 100 < 5) { 
-                int dmg = calculateAttackDamage();
-                cout << "(Hostile Tribe) Attacks you for " << dmg << " damage!" << endl;
+                int baseDmg = calculateAttackDamage();
+                
+                // --- 3. คำนวณดาเมจที่ NPC ตีผู้เล่นด้วยตัวคูณอารมณ์ ---
+                float multiplier = getEmotionMultiplier(currentEmotion, playerEmotion);
+                int finalDmg = static_cast<int>(baseDmg * multiplier);
+                
+                cout << "(Hostile Tribe) Attacks you for " << finalDmg << " damage!";
+                if (multiplier > 1.0f) cout << " (Emotion Advantage!)";
+                else if (multiplier < 1.0f) cout << " (Emotion Disadvantage)";
+                cout << endl;
             }
         } else {
-            animator->play(FLY_UP);
+            animator->play(UP);
         }
     }
 
@@ -166,14 +176,14 @@ private:
         position += randomMoveDir * speed * deltaTime;
 
         if (randomMoveDir.x == 0 && randomMoveDir.y == 0) {
-            animator->play(FLY_UP);
+            animator->play(UP);
         } else {
             if (abs(randomMoveDir.x) > abs(randomMoveDir.y)) {
-                if (randomMoveDir.x > 0) animator->play(FLY_RIGHT);
-                else animator->play(FLY_LEFT);
+                if (randomMoveDir.x > 0) animator->play(RIGHT);
+                else animator->play(LEFT);
             } else {
-                if (randomMoveDir.y > 0) animator->play(FLY_DOWN);
-                else animator->play(FLY_UP);
+                if (randomMoveDir.y > 0) animator->play(DOWN);
+                else animator->play(UP);
             }
         }
     }
@@ -186,6 +196,9 @@ public:
         timeNearNeutral = 0.0f;
         hasPrintedHostile = false;
 
+        // --- 4. สุ่มอารมณ์เริ่มต้นให้กับ NPC ---
+        currentEmotion = static_cast<Emotion>(rand() % 4);
+
         // assist chances
         assistChance = (rand() % 50 + 30) / 100.0f; 
         callHelpChance = (rand() % 60 + 20) / 100.0f;
@@ -197,7 +210,7 @@ public:
         currentHealth = maxHealth;
         isDead = false;
 
-        cout << "Tribe Spawned -> HP: " << maxHealth << " | MaxAtk: " << maxAttack << " | Crit: " << (critChance*100) << "%\n";
+        cout << "Tribe Spawned -> HP: " << maxHealth << " | MaxAtk: " << maxAttack << " | Crit: " << (critChance*100) << "% | Emotion ID: " << static_cast<int>(currentEmotion) << "\n";
 
         // load texture
         if (!texture.loadFromFile(textureFile)) { 
@@ -211,19 +224,20 @@ public:
         animator = new AnimationHandler(sprite);
         float animSpeed = 0.1f; 
         // 38x50 sprite sheet
-        animator->addAnimation({0, 6, 38, 50, 0, 0,   animSpeed}); // FLY_UP
-        animator->addAnimation({1, 6, 38, 50, 0, 55,  animSpeed}); // FLY_DOWN
-        animator->addAnimation({2, 6, 38, 50, 0, 110, animSpeed}); // FLY_LEFT
-        animator->addAnimation({3, 6, 38, 50, 0, 165, animSpeed}); // FLY_RIGHT
+        animator->addAnimation({0, 6, 38, 50, 0, 0,   animSpeed}); // UP
+        animator->addAnimation({1, 6, 38, 50, 0, 55,  animSpeed}); // DOWN
+        animator->addAnimation({2, 6, 38, 50, 0, 110, animSpeed}); // LEFT
+        animator->addAnimation({3, 6, 38, 50, 0, 165, animSpeed}); // RIGHT
         
-        animator->play(FLY_UP); 
+        animator->play(UP); 
     }
 
     ~TribeEntity() {
         delete animator;
     }
     
-    void update(float deltaTime, sf::Vector2f playerPos) {
+    // added default parameter (ส่งอารมณ์)
+    void update(float deltaTime, sf::Vector2f playerPos, Emotion playerEmotion = Emotion::Neutral) {
         if (isDead) return;
 
         // neglected for a moment --> decreases relationship
@@ -246,7 +260,8 @@ public:
                 performNeutralBehavior(deltaTime, playerPos);
                 break;
             case RelationState::Hostile:
-                performHostileBehavior(deltaTime, playerPos);
+                // ส่งอารมณ์ผู้เล่นไปให้เผ่าศัตรูประมวลผลตอนโจมตี
+                performHostileBehavior(deltaTime, playerPos, playerEmotion);
                 break;
         }
 
@@ -260,7 +275,7 @@ public:
         }
     }
 
-    // damag
+    // damage ดั้งเดิม (ไม่ถูกเปลี่ยนแปลงการทำงานหลัก)
     void takeDamage(int amount) {
         if (isDead) return;
 
@@ -276,7 +291,17 @@ public:
         }
     }
 
-    
+    // ++emotions
+    void takeDamage(int amount, Emotion attackerEmotion) {
+        float multiplier = getEmotionMultiplier(attackerEmotion, currentEmotion);
+        int finalDamage = static_cast<int>(amount * multiplier);
+        
+        if (multiplier > 1.0f) cout << "Super effective emotion attack!\n";
+        else if (multiplier < 1.0f) cout << "Not very effective emotion attack...\n";
+        
+        // returns to takeDamage --> decreases health
+        takeDamage(finalDamage); 
+    }
 
     void receiveItem() { 
         relation.modify(15.0f); 
@@ -335,7 +360,11 @@ public:
         }
     }
     
-    // getter funcs
+    // getter/setter funcs
     sf::Vector2f getPosition() { return position; } 
     bool isEntityDead() const { return isDead; }
+    
+    // เปลี่ยนอารมณ์ NPC
+    Emotion getEmotion() const { return currentEmotion; }
+    void setEmotion(Emotion newEmotion) { currentEmotion = newEmotion; }
 };
