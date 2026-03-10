@@ -8,7 +8,7 @@
 
 #include "relationship.h" 
 #include "animationHandler.h" 
-#include "emotions.h" // --- 1. นำเข้าระบบอารมณ์ ---
+#include "emotions.h"
 
 using namespace std;
 
@@ -25,12 +25,12 @@ private:
    
     Relationship relation; 
     sf::Vector2f position;
-    Emotion currentEmotion; // --- 2. เพิ่มสถานะอารมณ์ของ NPC ---
+    Emotion currentEmotion;
     
     // callouts
     float timeSinceLastInteraction; 
     float timeNearNeutral;          
-    bool hasPrintedHostile;         
+    bool isHostile;         
     float assistChance;     
     float callHelpChance;   
 
@@ -40,6 +40,7 @@ private:
     int maxHealth;      
     int currentHealth;  
     bool isDead;        
+    bool wantCombat;
 
     // animations
     sf::Texture texture;
@@ -118,9 +119,9 @@ private:
 
     // hostiles (เพิ่มการรับค่าอารมณ์ผู้เล่นเข้ามาคำนวณ)
     void performHostileBehavior(float deltaTime, sf::Vector2f playerPos, Emotion playerEmotion) {
-        if (!hasPrintedHostile) {
+        if (!isHostile) {
             cout << "(Hostile) The tribe is aggressive and attacking you!\n";
-            hasPrintedHostile = true;
+            isHostile = true;
         }
 
         float dist = getDistance(position, playerPos);
@@ -140,17 +141,11 @@ private:
             }
 
             // attacks a player
-            if (dist < 20.0f && rand() % 100 < 5) { 
-                int baseDmg = calculateAttackDamage();
+            if (dist < 20.0f) { 
+                wantCombat = true; // enables cutscene
                 
-                // --- 3. คำนวณดาเมจที่ NPC ตีผู้เล่นด้วยตัวคูณอารมณ์ ---
-                float multiplier = getEmotionMultiplier(currentEmotion, playerEmotion);
-                int finalDmg = static_cast<int>(baseDmg * multiplier);
-                
-                cout << "(Hostile Tribe) Attacks you for " << finalDmg << " damage!";
-                if (multiplier > 1.0f) cout << " (Emotion Advantage!)";
-                else if (multiplier < 1.0f) cout << " (Emotion Disadvantage)";
-                cout << endl;
+                // pushes the entity back to prevent the cutscene to appear again
+                position -= direction * 40.0f; 
             }
         } else {
             animator->play(UP);
@@ -191,17 +186,17 @@ private:
 public:
     // constructors
     TribeEntity(float startScore, sf::Vector2f startPos, std::string textureFile) 
-    : relation(startScore), position(startPos), randomMoveTimer(0), randomMoveDir(0,0) {
+    : relation(startScore), position(startPos), randomMoveTimer(0), randomMoveDir(0,0), wantCombat(false) {
         timeSinceLastInteraction = 0.0f;
         timeNearNeutral = 0.0f;
-        hasPrintedHostile = false;
+        isHostile = false;
 
-        // --- 4. สุ่มอารมณ์เริ่มต้นให้กับ NPC ---
+        
         currentEmotion = static_cast<Emotion>(rand() % 4);
 
         // assist chances
-        assistChance = (rand() % 50 + 30) / 100.0f; 
-        callHelpChance = (rand() % 60 + 20) / 100.0f;
+        assistChance = (rand() % 51 + 30) / 100.0f; 
+        callHelpChance = (rand() % 61 + 20) / 100.0f;
 
         // randomize stats
         maxAttack = static_cast<float>(rand() % 31 + 20); 
@@ -249,7 +244,7 @@ public:
         RelationState currentState = relation.getState();
 
         if (currentState != RelationState::Hostile) {
-            hasPrintedHostile = false;
+            isHostile = false;
         }
 
         switch (currentState) {
@@ -260,7 +255,7 @@ public:
                 performNeutralBehavior(deltaTime, playerPos);
                 break;
             case RelationState::Hostile:
-                // ส่งอารมณ์ผู้เล่นไปให้เผ่าศัตรูประมวลผลตอนโจมตี
+                // player's emotion
                 performHostileBehavior(deltaTime, playerPos, playerEmotion);
                 break;
         }
@@ -275,7 +270,28 @@ public:
         }
     }
 
-    // damage ดั้งเดิม (ไม่ถูกเปลี่ยนแปลงการทำงานหลัก)
+    bool checkAndResetCombatTrigger() {
+        if (wantCombat) {
+            wantCombat = false; // resets
+            return true;
+        }
+        return false;
+    }
+
+    // getter and setter for hp info
+    int getHP() const { return currentHealth; }
+    int getMaxHP() const { return maxHealth; }
+    int getMaxAttack() const { return static_cast<int>(maxAttack); }
+    sf::Sprite getSprite() const { return sprite; }
+    void setHP(int hp) { 
+        currentHealth = hp; 
+        if (currentHealth <= 0) {
+            isDead = true; 
+            cout << "The Tribe entity has been defeated.\n";
+        }
+    }
+
+    
     void takeDamage(int amount) {
         if (isDead) return;
 
@@ -291,7 +307,7 @@ public:
         }
     }
 
-    // ++emotions
+   
     void takeDamage(int amount, Emotion attackerEmotion) {
         float multiplier = getEmotionMultiplier(attackerEmotion, currentEmotion);
         int finalDamage = static_cast<int>(amount * multiplier);
@@ -335,7 +351,7 @@ public:
         timeSinceLastInteraction = 0.0f; 
     }
 
-    // กรณี ally อยู่ใกล้แล้วผู้เล่นโดนโจมตี 
+    
     void onPlayerAttacked(sf::Vector2f playerPos) {
         if (isDead) return;
 
@@ -367,4 +383,5 @@ public:
     // เปลี่ยนอารมณ์ NPC
     Emotion getEmotion() const { return currentEmotion; }
     void setEmotion(Emotion newEmotion) { currentEmotion = newEmotion; }
+    RelationState getRelationState() const { return relation.getState(); }
 };
